@@ -74,7 +74,7 @@ def verify_release(app: App, uow: UnitOfWork, order: HoldOrder, snap: Snapshot, 
                         ope_no=order.target_hold_ope_no,
                     )
                 ]
-                if not smm:
+                if not smm and order.close_reason != "SCAN_COMPLETED":
                     order.work_state = WorkState.DEFECT_HOLD_UNCONFIRMED
                     order.updated_at = now
                     uow.orders.update(order, order.row_version)
@@ -82,7 +82,12 @@ def verify_release(app: App, uow: UnitOfWork, order: HoldOrder, snap: Snapshot, 
             order.lifecycle = Lifecycle.CLOSED
             order.work_state = WorkState.CLOSED
             order.protection_state = ProtectionState.RELEASED
-            order.close_reason = "AI_OK" if order.ai_state.value == "COMPLETE_OK" else "TRANSFERRED"
+            if order.close_reason == "SCAN_COMPLETED":
+                pass
+            elif order.ai_state.value == "COMPLETE_OK":
+                order.close_reason = "AI_OK"
+            else:
+                order.close_reason = "TRANSFERRED"
             order.last_rule_id = "A2-11"
             order.updated_at = now
             emit(Event.RELEASE_CONFIRMED, function_code=FN, rule_id="A2-11", extra=order_fields(order))

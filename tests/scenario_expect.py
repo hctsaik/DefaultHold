@@ -16,7 +16,7 @@ EXPECT = {
     "T12": {"rules": {"A2-07"}, "events": {"release.sent"}},
     "T13": {"rules": {"A1-03"}, "events": {"order.created"}},
     "T14": {"rules": {"A2-08", "A2-11"}, "events": {"release.confirmed"}},
-    "T15": {"rules": {"A2-09"}, "events": {"incident.opened"}},
+    "T15": {"rules": {"A2-21"}, "events": {"release.sent"}},
     "T16": {"rules": {"A2-11"}, "events": {"release.confirmed"}},
     "T17": {"rules": {"A2-12"}, "events": {"release.failed"}},
     "T18": {"rules": {"A1-03"}, "events": {"decision.applied", "hold.sent"}},

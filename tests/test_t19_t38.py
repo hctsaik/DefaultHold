@@ -125,11 +125,7 @@ def test_t32_notifier_retry(h):
     h.world.add_lot("LOT1")
     h.world.set_response["LOT1"] = "rejected_conflict"
     h.world.notifier_fail = True
-    for _ in range(2):
-        h.set_hold()
-        h.confirm_hold()
     h.set_hold()
-    h.confirm_hold()
     h.defense()
     assert h.world.sent_emails == []
     h.world.notifier_fail = False

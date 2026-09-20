@@ -69,10 +69,7 @@ def test_drill_t02(caplog):
     caplog.set_level(logging.INFO, logger="vai_hold")
     h = make_harness()
     h.world.add_lot("LOT1")
-    h.world.set_response["LOT1"] = "rejected_conflict"
-    h.set_hold()
-    h.confirm_hold()
-    h.world.set_response["LOT1"] = "accepted"
+    h.world.set_response["LOT1"] = ["rejected_conflict", "accepted"]
     h.set_hold()
     h.confirm_hold()
     _assert_traceable(caplog, "T02")
@@ -83,9 +80,7 @@ def test_drill_t03(caplog):
     h = make_harness(extra_overrides={"hold": {"codes": ["ENHL", "OTHL", "HOLD3"]}})
     h.world.add_lot("LOT1")
     h.world.set_response["LOT1"] = "rejected_conflict"
-    for _ in range(3):
-        h.set_hold()
-        h.confirm_hold()
+    h.set_hold()
     _assert_traceable(caplog, "T03")
 
 
@@ -124,6 +119,7 @@ def test_drill_t15(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1", result="DEFECT")
+    h.clock.advance(minutes=2)
     h.check_ai()
     _assert_traceable(caplog, "T15")
 
@@ -189,11 +185,7 @@ def test_drill_t32(caplog):
     h.world.add_lot("LOT1")
     h.world.set_response["LOT1"] = "rejected_conflict"
     h.world.notifier_fail = True
-    for _ in range(2):
-        h.set_hold()
-        h.confirm_hold()
     h.set_hold()
-    h.confirm_hold()
     h.defense()
     h.world.notifier_fail = False
     h.clock.advance(minutes=1)

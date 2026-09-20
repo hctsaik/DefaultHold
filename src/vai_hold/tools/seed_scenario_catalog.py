@@ -26,7 +26,7 @@ SPEC = {
     "T12": {"situation": "Completed Time 全有但某片 Result 缺值", "expected": "AI_RESULT_INVALID", "forbidden": "當 No Defect"},
     "T13": {"situation": "Rework 1 只有 Rework 0 的完成資料", "expected": "等待本輪 AI，建立本輪防守", "forbidden": "套用舊結果／舊 Hold"},
     "T14": {"situation": "有 Defect 且正式 Future Hold 有效", "expected": "只解除預防性 Hold", "forbidden": "解除正式 Defect Hold"},
-    "T15": {"situation": "有 Defect 但正式 Hold 未設／錯站／錯輪次", "expected": "保留防守、告警", "forbidden": "自動 Release"},
+    "T15": {"situation": "有 Defect 但正式 Hold 未設，掃完已滿 2 分鐘", "expected": "解除 Default Hold，SCAN_COMPLETED", "forbidden": "data_error 告警；冒充設 SMM"},
     "T16": {"situation": "Release 生效但回覆 Timeout", "expected": "查驗後 CLOSED", "forbidden": "看到無 Hold 又建立 Hold"},
     "T17": {"situation": "Release 明確失敗、Hold 仍在", "expected": "RELEASE_FAILED、保留防守與告警", "forbidden": "直接 CLOSED"},
     "T18": {
@@ -117,10 +117,10 @@ ENG = {
         "dont": "因為 ENHL 失敗就整單 HOLD_FAILED。",
     },
     "C07": {
-        "given": "第一個 Hold Code（ENHL）被 MES 拒絕，Default Hold 還沒設上。",
-        "do": "改用下一個 Hold Code（OTHL）再向 MES 設 Default Hold。",
-        "then": "OTHL 的 Default Hold 已送出。",
-        "dont": "再送一次已經被拒的 ENHL。",
+        "given": "第一個 Hold Code（ENHL）被 MES 明確拒絕（Code 衝突），Default Hold 還沒設上。",
+        "do": "同一輪立刻改送下一個 Hold Code（OTHL）；必要時再送第三碼。不等下一分鐘。",
+        "then": "OTHL 的 Default Hold 已送出（同一輪已試過 ENHL）。",
+        "dont": "再送一次已經被拒的 ENHL；也不要等下一輪 Cron 才改碼。",
     },
     "C08": {
         "given": "本系統已確認 Default Hold 設上。後來現場把這筆 Hold 解掉了。",
@@ -129,10 +129,10 @@ ENG = {
         "dont": "當成事故再設一筆 Hold；也不要標成「全數 OK 結案」。",
     },
     "C09": {
-        "given": "所有 wafer 已掃完，有 Defect，但現場還沒有 SMM Hold。",
-        "do": "Default Hold 不解。留下錯誤紀錄，之後能查出「該有 SMM Hold 卻沒有」。",
-        "then": "Default Hold 仍在；訂單記錯誤；告警維持開著。",
-        "dont": "自動解除 Default Hold；也不要冒充去設 SMM Hold。",
+        "given": "所有 wafer 已掃完，有 Defect，現場還沒有 SMM Hold。最後一片掃完已滿 2 分鐘。",
+        "do": "不等 SMM Hold，向 MES 申請解除 Default Hold。保護空窗由另一隻程式處理。",
+        "then": "解除已送出；結案原因 SCAN_COMPLETED。不留 data_error、不開告警。",
+        "dont": "冒充去設 SMM Hold。全 OK 或已有 SMM Hold 不要再等 2 分鐘。",
     },
     "C10": {
         "given": "Default Hold 已在；有 Defect；MES 上已有 SMM Hold。",
@@ -207,10 +207,10 @@ ENG = {
         "dont": "把正式 Defect Hold 一起解掉。",
     },
     "T15": {
-        "given": "AI 有 Defect，正式 SmmHold 不在（或錯站／錯輪）。",
-        "do": "Default Hold 留著，告警。不解 Default Hold。",
-        "then": "DEFECT_HOLD_UNCONFIRMED。Order DB data_error=NO_SMM_HOLD_AFTER_SCAN。",
-        "dont": "自動 Release；也不要冒充去設 SmmHold。",
+        "given": "AI 有 Defect，正式 SmmHold 不在。掃完已滿 2 分鐘。",
+        "do": "申請解除 Default Hold；結案 SCAN_COMPLETED。",
+        "then": "RELEASE_SENT；close_reason=SCAN_COMPLETED。",
+        "dont": "留 data_error／C09 告警；冒充設 SMM Hold。",
     },
     "T16": {
         "given": "Release 回 Timeout，再查 MES 上自己的 Hold 已經沒了。",
@@ -478,10 +478,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=6),
         _s("T02", "v1", "【串接】ENHL 衝突後改 OTHL", [
             {"op": "add_lot", "lot_id": "LOT1"},
-            {"op": "set_world", "set_response": {"LOT1": "rejected_conflict"}},
-            {"op": "run", "fn": "set"},
-            {"op": "run", "fn": "confirm"},
-            {"op": "set_world", "set_response": {"LOT1": "accepted"}},
+            {"op": "set_world", "set_response": {"LOT1": ["rejected_conflict", "accepted"]}},
             {"op": "run", "fn": "set"},
             {"op": "run", "fn": "confirm"},
         ], {
@@ -490,12 +487,9 @@ def seed_cases() -> list[ScenarioCase]:
             "actions": {"set_hold": 2},
             "command_count": {"SET_HOLD": 2},
         }, n=2),
-        _s("C07", "stage", "C07 ENHL 衝突後改送 OTHL（原 T02）", [
+        _s("C07", "stage", "C07 ENHL 衝突後同一輪改送 OTHL（原 T02）", [
             {"op": "add_lot", "lot_id": "LOT1"},
-            {"op": "set_world", "set_response": {"LOT1": "rejected_conflict"}},
-            {"op": "run", "fn": "set"},
-            {"op": "run", "fn": "confirm"},
-            {"op": "set_world", "set_response": {"LOT1": "accepted"}},
+            {"op": "set_world", "set_response": {"LOT1": ["rejected_conflict", "accepted"]}},
             {"op": "run", "fn": "set"},
         ], {
             "actions": {"set_hold": 2},
@@ -505,7 +499,7 @@ def seed_cases() -> list[ScenarioCase]:
         _s("T03", "hold", "所有 Hold Code 失敗", [
             {"op": "add_lot", "lot_id": "LOT1"},
             {"op": "set_world", "set_response": {"LOT1": "rejected_conflict"}},
-            {"op": "repeat", "times": 3, "steps": [{"op": "run", "fn": "set"}, {"op": "run", "fn": "confirm"}]},
+            {"op": "run", "fn": "set"},
         ], {
             "work_state": "HOLD_FAILED",
             "incidents": ["HOLD_FAILED"],
@@ -607,16 +601,17 @@ def seed_cases() -> list[ScenarioCase]:
             "close_reason": "TRANSFERRED",
             "facts": {"SmmHold": {"Holds": [{"HoldCode": "SMMH", "HoldUser": "AOA"}]}},
         }, n=11),
-        _s("C09", "stage", "C09 有 Defect 無 SMM Hold（原 T15）", HAPPY + [
+        _s("C09", "stage", "C09 有 Defect 無 SMM Hold 逾時解（原 T15）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1", "result": "DEFECT"},
+            {"op": "advance", "minutes": 2},
             {"op": "run", "fn": "check"},
         ], {
-            "work_state": "DEFECT_HOLD_UNCONFIRMED",
+            "work_state": "RELEASE_SENT",
             "lifecycle": "OPEN",
-            "data_error": "NO_SMM_HOLD_AFTER_SCAN",
-            "actions": {"release": 0},
-            "incidents": ["DEFECT_HOLD_UNCONFIRMED"],
-            "facts": {"OrderDb": {"DataError": "NO_SMM_HOLD_AFTER_SCAN", "WorkState": "DEFECT_HOLD_UNCONFIRMED"}},
+            "close_reason": "SCAN_COMPLETED",
+            "data_error": None,
+            "actions": {"release": 1},
+            "incidents": [],
         }, n=9),
         _s("T16", "release", "Release timeout 但 Hold 已消失 → CLOSED", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
@@ -651,10 +646,7 @@ def seed_cases() -> list[ScenarioCase]:
         _s("T18b", "hold", "別人的 ENHL 不是我們的，自己的 ENHL 設不上就試 OTHL", [
             {"op": "add_lot", "lot_id": "LOT1"},
             {"op": "add_foreign_hold", "lot_id": "LOT1", "hold_code": "ENHL", "memo": "SOME OTHER MEMO", "ope_no": "OP200"},
-            {"op": "set_world", "set_response": {"LOT1": "rejected_conflict"}},
-            {"op": "run", "fn": "set"},
-            {"op": "run", "fn": "confirm"},
-            {"op": "set_world", "set_response": {"LOT1": "accepted"}},
+            {"op": "set_world", "set_response": {"LOT1": ["rejected_conflict", "accepted"]}},
             {"op": "run", "fn": "set"},
             {"op": "run", "fn": "confirm"},
         ], {

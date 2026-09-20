@@ -7,7 +7,7 @@
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
     mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { htmlLabels: true } });
     document.addEventListener("DOMContentLoaded", () => {
-      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等所有 Wafer 判斷完 SMM", "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解", "READY_RELEASE_OK": "整批 OK，可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold", "DEFECT_HOLD_UNCONFIRMED": "有 Defect 但 SMM Hold 還沒接手，不解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
+      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘", "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解", "READY_RELEASE_OK": "可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
       const applyTips = () => {
         document.querySelectorAll("svg .stateLabel, svg .nodeLabel, svg text").forEach((el) => {
           const t = (el.textContent || "").trim().split(/\s|\n/)[0];
@@ -95,7 +95,7 @@
   </div>
   <div class="verdict pass">結論：與預期相符
     <div class="sub"><strong>實際系統做了：</strong>向 MES 確認 Default Hold 是否存在。</div>
-    <div class="sub"><strong>現在：</strong>Default Hold 已在 MES 上確認存在，正在等所有 wafer 掃完。</div>
+    <div class="sub"><strong>現在：</strong>Default Hold 已確認存在。正在等掃完，或掃完未滿 2 分鐘。</div>
   </div>
   
   <div class="card">
@@ -157,7 +157,7 @@ stateDiagram-v2
   WAIT_AI --> WAIT_AI: 3. DEFENSE
   state "NEED_HOLD<br/>起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）" as NEED_HOLD
   state "HOLD_VERIFY_PENDING<br/>已送出、這格不查它在不在；下一格才查 MES" as HOLD_VERIFY_PENDING
-  state "WAIT_AI<br/>已設 Default Hold，等所有 Wafer 判斷完 SMM" as WAIT_AI
+  state "WAIT_AI<br/>已設 Default Hold，等掃片或掃完未滿 2 分鐘" as WAIT_AI
 
     </pre>
   </div>

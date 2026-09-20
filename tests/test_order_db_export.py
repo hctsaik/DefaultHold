@@ -43,9 +43,9 @@ def test_export_order_sqlite_has_c09_error_and_dot_slot(tmp_path):
     conn.row_factory = sqlite3.Row
     c09 = conn.execute("SELECT * FROM hold_order WHERE lot_id='A123456'").fetchone()
     assert c09 is not None
-    assert c09["work_state"] == "DEFECT_HOLD_UNCONFIRMED"
-    assert c09["data_error"] == "NO_SMM_HOLD_AFTER_SCAN"
-    assert c09["lifecycle"] == "OPEN"
+    assert c09["work_state"] in {"RELEASE_SENT", "CLOSED"}
+    assert c09["close_reason"] == "SCAN_COMPLETED"
+    assert not c09["data_error"]
     wafers = conn.execute(
         "SELECT wafer_id FROM order_wafer WHERE order_id=? ORDER BY wafer_id",
         (c09["order_id"],),
@@ -70,7 +70,7 @@ def test_export_order_sqlite_has_c09_error_and_dot_slot(tmp_path):
     inc = conn.execute(
         "SELECT occurrence_count FROM incident WHERE lot_id='A123456' AND incident_type='DEFECT_HOLD_UNCONFIRMED'"
     ).fetchone()
-    assert inc["occurrence_count"] == 1
+    assert inc is None
     conn.close()
 
 

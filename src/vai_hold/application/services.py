@@ -149,16 +149,25 @@ def snapshot(app: App, uow: UnitOfWork, order: HoldOrder, *, persist_ai: bool = 
         smm_hold_step=app.settings.smm_hold_step,
         smm_memo_template=app.settings.smm_memo_template,
         max_action_attempts=app.settings.max_action_attempts,
+        now=app.clock.now(),
     )
 
 
 def apply_projection(order: HoldOrder, decision: Decision, now: datetime) -> bool:
     """Return False if nothing material changed（避免每分鐘重寫 Order DB／Log）。"""
     data_error = order.data_error
-    if decision.work_state == WorkState.DEFECT_HOLD_UNCONFIRMED:
-        data_error = "NO_SMM_HOLD_AFTER_SCAN"
-    elif order.data_error == "NO_SMM_HOLD_AFTER_SCAN":
-        data_error = None
+    want_close = order.close_reason
+    if decision.reason == "scan_completed":
+        want_close = "SCAN_COMPLETED"
+    elif decision.work_state == WorkState.CLOSED:
+        if order.close_reason == "SCAN_COMPLETED" or decision.reason == "scan_completed":
+            want_close = "SCAN_COMPLETED"
+        elif decision.ai_state == AiState.COMPLETE_OK:
+            want_close = "AI_OK"
+        else:
+            want_close = "TRANSFERRED"
+    elif decision.work_state == WorkState.MANUAL_CLOSED:
+        want_close = "MANUAL"
     if (
         order.work_state == decision.work_state
         and order.protection_state == decision.protection_state
@@ -166,16 +175,7 @@ def apply_projection(order: HoldOrder, decision: Decision, now: datetime) -> boo
         and order.last_rule_id == decision.rule_id
         and order.state_reason == decision.reason
         and order.data_error == data_error
-        and order.close_reason
-        == (
-            "AI_OK"
-            if decision.work_state == WorkState.CLOSED and decision.ai_state == AiState.COMPLETE_OK
-            else "TRANSFERRED"
-            if decision.work_state == WorkState.CLOSED
-            else "MANUAL"
-            if decision.work_state == WorkState.MANUAL_CLOSED
-            else order.close_reason
-        )
+        and order.close_reason == want_close
     ):
         return False
     order.work_state = decision.work_state
@@ -186,9 +186,13 @@ def apply_projection(order: HoldOrder, decision: Decision, now: datetime) -> boo
     order.data_error = data_error
     order.last_evaluated_at = now
     order.updated_at = now
+    if decision.reason == "scan_completed":
+        order.close_reason = "SCAN_COMPLETED"
     if decision.work_state == WorkState.CLOSED:
         order.lifecycle = Lifecycle.CLOSED
-        if decision.ai_state == AiState.COMPLETE_OK:
+        if order.close_reason == "SCAN_COMPLETED" or decision.reason == "scan_completed":
+            order.close_reason = "SCAN_COMPLETED"
+        elif decision.ai_state == AiState.COMPLETE_OK:
             order.close_reason = "AI_OK"
         else:
             order.close_reason = "TRANSFERRED"

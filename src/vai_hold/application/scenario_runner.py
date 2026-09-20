@@ -88,6 +88,8 @@ def apply_given(h, given: dict[str, Any]) -> None:
         )
     if world.get("set_response"):
         h.world.set_response.update(world["set_response"])
+        for k in world["set_response"]:
+            h.world.set_response_i.pop(k, None)
     if world.get("set_effect"):
         h.world.set_effect.update(world["set_effect"])
     if world.get("list_status"):

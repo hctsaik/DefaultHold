@@ -131,11 +131,20 @@ def run(app: App, params: dict) -> RunResult:
                 snap = snapshot(app, uow, order)
                 decision = plan_action(derive_state(snap), FN)
             if decision.business_action == BusinessAction.SET_HOLD:
-                emit_decision(
-                    FN, snap, decision, order, rec_time=now, observation_phase="before_action"
-                )
-                sent = request_hold(app, uow, order, decision, now)
-                if sent:
+                max_codes = max(1, len(app.settings.hold_codes))
+                sent_any = False
+                for _ in range(max_codes):
+                    if decision.business_action != BusinessAction.SET_HOLD:
+                        break
+                    emit_decision(
+                        FN, snap, decision, order, rec_time=now, observation_phase="before_action"
+                    )
+                    sent = request_hold(app, uow, order, decision, now)
+                    if not sent:
+                        break
+                    sent_any = True
+                    result.holds_sent += 1
+                    order = uow.orders.get(order.order_id) or order
                     snap = snapshot(app, uow, order)
                     emit_decision(
                         FN,
@@ -146,8 +155,30 @@ def run(app: App, params: dict) -> RunResult:
                         force=True,
                         observation_phase="after_write",
                     )
-                    result.holds_sent += 1
-                    result.processed += 1
+                    decision = plan_action(derive_state(snap), FN)
+                    # 明確衝突：同一輪立刻改下一個 Code，不等下一分鐘。
+                    if (
+                        decision.business_action == BusinessAction.SET_HOLD
+                        and decision.reason == "backup_hold_code"
+                    ):
+                        continue
+                    break
+                if decision.business_action == BusinessAction.OPEN_INCIDENT:
+                    for t in decision.incidents:
+                        open_incident(
+                            app, uow, itype=t, order=order, reason=decision.reason,
+                            now=now, function_code=FN, rule_id=decision.rule_id,
+                        )
+                    persist_projection(uow, order, decision, now)
+                    if decision.work_state == WorkState.HOLD_FAILED:
+                        emit(
+                            Event.HOLD_FAILED,
+                            function_code=FN,
+                            rule_id=decision.rule_id,
+                            extra=order_fields(order),
+                        )
+                result.processed += 1
+                if sent_any:
                     continue
             emit_decision(FN, snap, decision, order, rec_time=now, observation_phase="before_action")
             if decision.business_action == BusinessAction.OPEN_INCIDENT:

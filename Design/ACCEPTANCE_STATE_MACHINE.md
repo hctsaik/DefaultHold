@@ -23,7 +23,7 @@
 | **C06** | 自己的 Hold 沒了 | CONFIRM_RELEASE | `CLOSED`／AI_OK |
 | **C07** | ENHL 衝突 | SET OTHL | 已送 OTHL |
 | **C08** | 線上代解 | CONFIRM | `LINE_RELEASED` |
-| **C09** | Defect 無 SMM Hold | CHECK | `DEFECT_HOLD_UNCONFIRMED`；不解 Default Hold；Order DB `data_error=NO_SMM_HOLD_AFTER_SCAN` |
+| **C09** | Defect 無 SMM Hold，掃完已滿 2 分鐘 | CHECK | 申請解除 Default Hold；`close_reason=SCAN_COMPLETED`；不留 data_error／告警 |
 | **C10** | 有 SMM Hold | CHECK | `RELEASE_SENT` |
 | **C11** | 交接後確認解除 | CONFIRM_RELEASE | `CLOSED`；SMM Hold 仍在 |
 

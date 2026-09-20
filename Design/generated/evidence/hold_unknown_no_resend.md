@@ -44,7 +44,7 @@
   },
   "SmmHold": {
     "StepMode": "DefaultHoldStep",
-    "StepOpeNo": "OP200",
+    "OpeNo": "OP200",
     "QueryStatus": "NOT_FOUND",
     "Holds": []
   },
@@ -54,7 +54,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000104-EQP01",
+    "OrderId": "20260101-000000783-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "NEED_HOLD",
     "ProtectionState": "NONE",
@@ -117,7 +117,7 @@
   },
   "SmmHold": {
     "StepMode": "DefaultHoldStep",
-    "StepOpeNo": "OP200",
+    "OpeNo": "OP200",
     "QueryStatus": "NOT_FOUND",
     "Holds": []
   },
@@ -127,7 +127,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000104-EQP01",
+    "OrderId": "20260101-000000783-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "HOLD_VERIFY_PENDING",
     "ProtectionState": "SET_PENDING",

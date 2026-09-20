@@ -6,7 +6,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 | Lot | 故事 | 你該看到 |
 |---|---|---|
-| A123456 | C09 掃完 Defect、現場還沒 SMM Hold | **不解** Default Hold；`data_error=NO_SMM_HOLD_AFTER_SCAN`；incident OPEN |
+| A123456 | C09 掃完 Defect、無 SMM Hold、已滿 2 分鐘 | 申請解除；`close_reason=SCAN_COMPLETED` |
 | A123457 | T12 `.03` 有掃完時間、沒 Alarm Type | 當掃完；`order_wafer.missing_alarm_type=1` |
 | A123458 | C03 還缺一片 | `WAIT_AI`，沒 Release |
 | A123459 | 全 OK | `CLOSED` / `AI_OK` |
@@ -17,7 +17,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 | lot_id | work_state | data_error | lifecycle | close_reason | last_rule_id |
 | --- | --- | --- | --- | --- | --- |
-| A123456 | DEFECT_HOLD_UNCONFIRMED | NO_SMM_HOLD_AFTER_SCAN | OPEN |  | A2-09 |
+| A123456 | CLOSED |  | CLOSED | SCAN_COMPLETED | A2-11 |
 | A123457 | CLOSED |  | CLOSED | AI_OK | A2-11 |
 | A123458 | WAIT_AI |  | OPEN |  | A2-05 |
 | A123459 | CLOSED |  | CLOSED | AI_OK | A2-11 |
@@ -49,9 +49,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 ## 還開著的 incident
 
-| lot_id | type | status | reason | count |
-| --- | --- | --- | --- | --- |
-| A123456 | DEFECT_HOLD_UNCONFIRMED | OPEN | defect_without_formal_hold | 1 |
+（空）
 
 ## 建議 SQL
 

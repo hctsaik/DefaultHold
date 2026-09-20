@@ -42,7 +42,8 @@ def test_all_catalog_scenarios_on_sqlite_order_db(tmp_path):
     for sid in ("C01", "C02", "C03", "C04", "C05", "C06", "C07", "C08", "C09", "C10", "C11"):
         assert sid in by_id, sid
         assert by_id[sid].passed, sid
-    assert by_id["C09"].actual.get("data_error") == "NO_SMM_HOLD_AFTER_SCAN"
+    assert by_id["C09"].actual.get("close_reason") == "SCAN_COMPLETED"
+    assert by_id["C09"].actual.get("work_state") == "RELEASE_SENT"
 
 
 

@@ -148,6 +148,8 @@ def request_release(
     order.protection_state = ProtectionState.RELEASE_PENDING
     order.last_rule_id = decision.rule_id
     order.ai_state = decision.ai_state
+    if decision.reason == "scan_completed":
+        order.close_reason = "SCAN_COMPLETED"
     order.updated_at = now
     uow.orders.update(order, order.row_version)
     uow.commit()

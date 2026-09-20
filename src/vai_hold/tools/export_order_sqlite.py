@@ -85,6 +85,7 @@ def export_order_db(path: Path | None = None) -> Path:
     h.world.complete_ai("A123460")
     h.world.scan_wafer("A123460", mes_wafer_id("A123460", 1), result="DEFECT")
     h.world.add_defect_hold("A123460", memo="Please check #1")
+    h.clock.advance(minutes=2)
 
     h.check_ai()
     h.confirm_release()
@@ -152,7 +153,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 | Lot | 故事 | 你該看到 |
 |---|---|---|
-| A123456 | C09 掃完 Defect、現場還沒 SMM Hold | **不解** Default Hold；`data_error=NO_SMM_HOLD_AFTER_SCAN`；incident OPEN |
+| A123456 | C09 掃完 Defect、無 SMM Hold、已滿 2 分鐘 | 申請解除；`close_reason=SCAN_COMPLETED` |
 | A123457 | T12 `.03` 有掃完時間、沒 Alarm Type | 當掃完；`order_wafer.missing_alarm_type=1` |
 | A123458 | C03 還缺一片 | `WAIT_AI`，沒 Release |
 | A123459 | 全 OK | `CLOSED` / `AI_OK` |

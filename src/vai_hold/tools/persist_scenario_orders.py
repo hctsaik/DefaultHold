@@ -114,8 +114,8 @@ def verify_persisted(results, orders_root: Path, catalog) -> list[str]:
     c09 = next((r for r in results if r.scenario_id == "C09"), None)
     if c09 is None:
         problems.append("C09 not run")
-    elif c09.actual.get("data_error") != "NO_SMM_HOLD_AFTER_SCAN":
-        problems.append(f"C09 data_error={c09.actual.get('data_error')!r}")
+    elif c09.actual.get("close_reason") != "SCAN_COMPLETED":
+        problems.append(f"C09 close_reason={c09.actual.get('close_reason')!r}")
     for r in results:
         db = order_db_path(orders_root, r.scenario_id)
         if not db.is_file():
@@ -130,11 +130,13 @@ def verify_persisted(results, orders_root: Path, catalog) -> list[str]:
             if "data_error" not in cols:
                 problems.append(f"{r.scenario_id} hold_order missing data_error")
             if r.scenario_id == "C09":
-                err = conn.execute("SELECT data_error, work_state FROM hold_order").fetchone()
-                if not err or err[0] != "NO_SMM_HOLD_AFTER_SCAN":
-                    problems.append(f"C09 sqlite data_error={err!r}")
-                if not err or err[1] != "DEFECT_HOLD_UNCONFIRMED":
-                    problems.append(f"C09 sqlite work_state={err!r}")
+                row = conn.execute("SELECT close_reason, work_state, data_error FROM hold_order").fetchone()
+                if not row or row[0] != "SCAN_COMPLETED":
+                    problems.append(f"C09 sqlite close_reason={row!r}")
+                if not row or row[1] != "RELEASE_SENT":
+                    problems.append(f"C09 sqlite work_state={row!r}")
+                if row and row[2]:
+                    problems.append(f"C09 sqlite data_error should be empty: {row[2]!r}")
         finally:
             conn.close()
     disabled = {c.scenario_id for c in catalog.list_all() if not c.enabled}

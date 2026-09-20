@@ -31,13 +31,20 @@ def test_t01_happy_path_25_ok(h: Harness):
     assert order.last_rule_id == "A2-11"
 
 
+def test_enhl_conflict_sends_othl_in_same_set_round(h: Harness):
+    h.world.add_lot("LOT1")
+    h.world.set_response["LOT1"] = ["rejected_conflict", "accepted"]
+    h.set_hold()
+    assert [c.hold_code for c in h.world.set_hold_calls] == ["ENHL", "OTHL"]
+    assert h.order().work_state == WorkState.HOLD_VERIFY_PENDING
+    assert h.world.set_hold_calls[-1].hold_code == "OTHL"
+
+
 def test_t02_enhl_conflict_othl_ok(h: Harness):
     h.world.add_lot("LOT1")
-    h.world.set_response["LOT1"] = "rejected_conflict"
+    h.world.set_response["LOT1"] = ["rejected_conflict", "accepted"]
     h.set_hold()
-    h.confirm_hold()
-    h.world.set_response["LOT1"] = "accepted"
-    h.set_hold()
+    assert [c.hold_code for c in h.world.set_hold_calls] == ["ENHL", "OTHL"]
     h.confirm_hold()
     order = h.order()
     assert order.protection_state == ProtectionState.CONFIRMED
@@ -74,9 +81,8 @@ def test_t03_all_codes_fail():
     h = make_harness(extra_overrides={"hold": {"codes": ["ENHL", "OTHL", "HOLD3"]}})
     h.world.add_lot("LOT1")
     h.world.set_response["LOT1"] = "rejected_conflict"
-    for _ in range(3):
-        h.set_hold()
-        h.confirm_hold()
+    h.set_hold()
+    assert [c.hold_code for c in h.world.set_hold_calls] == ["ENHL", "OTHL", "HOLD3"]
     order = h.order()
     assert order.work_state == WorkState.HOLD_FAILED
     types = {i.incident_type for i in h.incidents()}
@@ -167,49 +173,28 @@ def test_t12_completed_without_result(h: Harness):
     assert [w.wafer_id for w in flags] == ["W03"]
 
 
-def test_c09_eval_shows_data_error_after_write(h: Harness, caplog):
-    import logging
-
-    from vai_hold.investigate import parse_records
-
-    caplog.set_level(logging.INFO, logger="vai_hold")
-    _happy_until_hold(h)
-    h.world.complete_ai("LOT1", result="DEFECT")
-    caplog.clear()
-    h.check_ai()
-    recs = parse_records(caplog.text)
-    evals = [r for r in recs if r.get("event") == "eval.cycle"]
-    assert evals
-    after = [r for r in evals if r.get("observation_phase") == "after_write"] or evals
-    odb = (after[-1].get("observed") or {}).get("OrderDb") or {}
-    assert odb.get("DataError") == "NO_SMM_HOLD_AFTER_SCAN"
-    decs = [r for r in recs if r.get("event") == "decision.applied" and r.get("observation_phase") == "after_write"] or [
-        r for r in recs if r.get("event") == "decision.applied"
-    ]
-    assert decs[-1].get("facts", {}).get("data_error") == "NO_SMM_HOLD_AFTER_SCAN"
-
-
-def test_c09_keeps_default_hold_and_records_order_data_error(h: Harness):
+def test_defect_no_smm_before_two_minutes_does_not_release(h: Harness):
     _happy_until_hold(h)
     h.world.complete_ai("LOT1", result="DEFECT")
     h.check_ai()
     order = h.order()
-    assert order.work_state == WorkState.DEFECT_HOLD_UNCONFIRMED
-    assert order.data_error == "NO_SMM_HOLD_AFTER_SCAN"
-    assert order.lifecycle == Lifecycle.OPEN
+    assert order.work_state == WorkState.WAIT_AI
+    assert order.data_error is None
     assert not h.world.release_calls
-    types = {i.incident_type for i in h.incidents()}
-    assert "DEFECT_HOLD_UNCONFIRMED" in types
-    version = order.row_version
+    assert "DEFECT_HOLD_UNCONFIRMED" not in {i.incident_type for i in h.incidents()}
+
+
+def test_c09_after_two_minutes_releases_scan_completed(h: Harness):
+    _happy_until_hold(h)
+    h.world.complete_ai("LOT1", result="DEFECT")
+    h.clock.advance(minutes=2)
     h.check_ai()
-    h.check_ai()
-    later = h.order()
-    assert later.work_state == WorkState.DEFECT_HOLD_UNCONFIRMED
-    assert later.data_error == "NO_SMM_HOLD_AFTER_SCAN"
-    assert later.row_version == version
-    rows = [i for i in h.incidents() if i.incident_type == "DEFECT_HOLD_UNCONFIRMED"]
-    assert len(rows) == 1
-    assert rows[0].occurrence_count == 1
+    order = h.order()
+    assert order.work_state == WorkState.RELEASE_SENT
+    assert order.close_reason == "SCAN_COMPLETED"
+    assert order.data_error is None
+    assert h.world.release_calls
+    assert "DEFECT_HOLD_UNCONFIRMED" not in {i.incident_type for i in h.incidents()}
 
 
 def test_wait_ai_set_pipeline_does_not_rewrite_order(h: Harness):
@@ -275,7 +260,7 @@ def test_next_process_step_smm_hold_is_after_current_not_after_default_hold():
     h.world.add_defect_hold("LOT1", ope_no="OP150")
     h.check_ai()
     # D04：只有 Default Hold 站（OP200）的 SMM Hold 算接手
-    assert h.order().work_state == WorkState.DEFECT_HOLD_UNCONFIRMED
+    assert h.order().work_state == WorkState.WAIT_AI
 
 
 def test_next_process_step_does_not_treat_hold_after_default_hold_as_smm():
@@ -294,7 +279,7 @@ def test_next_process_step_does_not_treat_hold_after_default_hold_as_smm():
     h.world.complete_ai("LOT1", result="DEFECT")
     h.world.add_defect_hold("LOT1", ope_no="OP500")
     h.check_ai()
-    assert h.order().work_state == WorkState.DEFECT_HOLD_UNCONFIRMED
+    assert h.order().work_state == WorkState.WAIT_AI
 
 
 def test_wafer_based_smm_memo_transfer_accumulates_slots(h: Harness):
@@ -380,7 +365,7 @@ def test_t15_defect_without_formal_hold(h: Harness):
     _happy_until_hold(h)
     h.world.complete_ai("LOT1", result="DEFECT")
     h.check_ai()
-    assert h.order().work_state == WorkState.DEFECT_HOLD_UNCONFIRMED
+    assert h.order().work_state == WorkState.WAIT_AI
     assert not h.world.release_calls
 
 
@@ -426,10 +411,7 @@ def test_t18_foreign_enhl_not_ours(h: Harness):
 def test_t18b_foreign_enhl_our_enhl_conflict_then_othl(h: Harness):
     h.world.add_lot("LOT1")
     h.world.add_foreign_hold("LOT1", hold_code="ENHL", memo="SOME OTHER MEMO", ope_no="OP200")
-    h.world.set_response["LOT1"] = "rejected_conflict"
-    h.set_hold()
-    h.confirm_hold()
-    h.world.set_response["LOT1"] = "accepted"
+    h.world.set_response["LOT1"] = ["rejected_conflict", "accepted"]
     h.set_hold()
     h.confirm_hold()
     assert h.order().protection_state == ProtectionState.CONFIRMED

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
-from vai_hold.domain.ai_complete import expected_complete
+from vai_hold.domain.ai_complete import expected_complete, scan_settle_ready
 from vai_hold.domain.enums import (
     ActionState,
     ActionType,
@@ -65,6 +66,7 @@ class Snapshot:
     smm_hold_step: str = "DefaultHoldStep"
     smm_memo_template: str = "Please check {slots}"
     max_action_attempts: int = 3
+    now: datetime | None = None
 
 
 def _codes_attempted(commands: list[ActionCommand]) -> list[str]:
@@ -399,14 +401,28 @@ def derive_state(snap: Snapshot) -> Decision:
                 business_action=BusinessAction.SET_RELEASE,
                 reason="defect_hold_handoff",
             )
+        clock = snap.now or order.updated_at
+        if clock and scan_settle_ready(
+            snap.expected_wafer_ids,
+            snap.ai_views,
+            rework_count=order.rework_count,
+            now=clock,
+        ):
+            return Decision(
+                rule_id="A2-21",
+                work_state=WorkState.READY_RELEASE_OK,
+                protection_state=ProtectionState.CONFIRMED,
+                ai_state=AiState.COMPLETE_DEFECT,
+                business_action=BusinessAction.SET_RELEASE,
+                reason="scan_completed",
+            )
         return Decision(
             rule_id="A2-09",
-            work_state=WorkState.DEFECT_HOLD_UNCONFIRMED,
+            work_state=WorkState.WAIT_AI,
             protection_state=ProtectionState.CONFIRMED,
             ai_state=AiState.COMPLETE_DEFECT,
-            business_action=BusinessAction.OPEN_INCIDENT,
-            reason="defect_without_formal_hold",
-            incidents=["DEFECT_HOLD_UNCONFIRMED"],
+            business_action=BusinessAction.CHECK_AI,
+            reason="defect_scan_dwell",
         )
 
     if confirmed_binding and not own_holds and not (

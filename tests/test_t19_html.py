@@ -55,7 +55,7 @@ def test_scenario_index_links_every_catalog_case():
     assert "已送出" in text
     assert "HOLD_VERIFY_PENDING" in text
     assert "<br/>" in text
-    assert "等所有 Wafer 判斷完 SMM" in text
+    assert "等掃片" in text or "未滿 2 分鐘" in text
     assert "RELEASE_SENT" in text
     assert "C10" in text
     assert "<details" in text

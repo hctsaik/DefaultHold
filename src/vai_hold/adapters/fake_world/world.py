@@ -56,6 +56,7 @@ class FakeWorld:
     network_calls: int = 0
     late_commit: dict[str, Callable[[], None]] = field(default_factory=dict)
     seen_idempotency: set[str] = field(default_factory=set)
+    set_response_i: dict[str, int] = field(default_factory=dict)
 
     def add_lot(
         self,
@@ -217,7 +218,13 @@ class FakeHoldPort:
             return TransportReceipt(outcome=ReceiptOutcome.ACCEPTED, started_at=now, finished_at=now)
         key = cmd.lot_id
         effect = self.world.set_effect.get(key, "create")
-        response = self.world.set_response.get(key, "accepted")
+        raw = self.world.set_response.get(key, "accepted")
+        if isinstance(raw, list):
+            i = self.world.set_response_i.get(key, 0)
+            response = raw[i] if i < len(raw) else (raw[-1] if raw else "accepted")
+            self.world.set_response_i[key] = i + 1
+        else:
+            response = str(raw)
 
         def _same_record(h: HoldCommand) -> bool:
             return (

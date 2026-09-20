@@ -181,7 +181,8 @@ RULE_WHY = {
     "A2-06": "掃片結果無效，不解 Default Hold",
     "A2-07": "整批 OK，向 MES 申請解除 Default Hold",
     "A2-08": "有 Defect 且現場已有 SMM Hold，申請解除 Default Hold",
-    "A2-09": "有 Defect 但現場還沒 SMM Hold，不解 Default Hold",
+    "A2-09": "有 Defect、還沒 SMM Hold，掃完未滿 2 分鐘，暫不解",
+    "A2-21": "有 Defect、還沒 SMM Hold，掃完已滿 2 分鐘，申請解除 Default Hold",
     "A2-10": "已申請解除，向 MES 確認自己的 Default Hold 還在不在",
     "A2-11": "自己的 Default Hold 已沒有，結案",
     "A2-12": "解除失敗，Default Hold 留著",
@@ -199,7 +200,8 @@ RULE_TO_ACTION = {
     "A2-06": "NONE",
     "A2-07": "SET_RELEASE",
     "A2-08": "SET_RELEASE",
-    "A2-09": "OPEN_INCIDENT",
+    "A2-09": "NONE",
+    "A2-21": "SET_RELEASE",
     "A2-10": "VERIFY_RELEASE",
     "A2-11": "NONE",
     "A2-12": "OPEN_INCIDENT",
@@ -234,7 +236,7 @@ def _facts_decision_bridge(actual: dict) -> str:
     action = (actual.get("judgment") or {}).get("action") or ""
     why = RULE_WHY.get(str(rule), "")
     act_key = str(action) or RULE_TO_ACTION.get(str(rule), "")
-    if str(rule) in {"A2-04", "A2-05", "A2-09", "A2-11"}:
+    if str(rule) in {"A1-04", "A2-04", "A2-05", "A2-09", "A2-11", "A2-21"}:
         act_biz = RULE_WHY.get(str(rule), "")
     else:
         act_biz = ACTION_WHY.get(act_key, "") or why or "見各欄"
@@ -380,7 +382,7 @@ def _this_cell_did(actual: dict) -> str:
     """這一格做的事，不是劇本前面累積的 set_hold 次數。"""
     rule = str(actual.get("last_rule_id") or "")
     action = str((actual.get("judgment") or {}).get("action") or RULE_TO_ACTION.get(rule) or "")
-    if rule in {"A2-04", "A2-05", "A2-09", "A2-11"}:
+    if rule in {"A1-04", "A2-04", "A2-05", "A2-09", "A2-11", "A2-21"}:
         return RULE_WHY[rule]
     biz = ACTION_WHY.get(action) or RULE_WHY.get(rule) or "見本頁「為什麼做這一步」"
     place = _hold_place(actual)
@@ -396,13 +398,12 @@ def _business_result(actual: dict) -> tuple[str, str]:
     now = {
         "NEED_HOLD": "還沒向 MES 設 Default Hold。",
         "HOLD_VERIFY_PENDING": "Default Hold 已送出，還沒確認它真的在 MES 上。還沒掃片、還沒解除。",
-        "WAIT_AI": "Default Hold 已在 MES 上確認存在，正在等所有 wafer 掃完。",
+        "WAIT_AI": "Default Hold 已確認存在。正在等掃完，或掃完未滿 2 分鐘。",
         "PROTECTION_CONFIRMED": "Default Hold 已確認存在。",
         "RELEASE_SENT": "已向 MES 申請解除 Default Hold，還沒確認解除成功，這張單尚未結案。",
         "RELEASE_VERIFY_PENDING": "解除已送出，MES 上可能還沒跟上；不重送、不結案。",
         "CLOSED": "Default Hold 已確認解除，這張單結案。",
         "MANUAL_CLOSED": "MES 上 Default Hold 已不在（線上代解），這張單結案。",
-        "DEFECT_HOLD_UNCONFIRMED": "有 Defect，但現場還沒有 SMM Hold；Default Hold 不解。",
         "HOLD_FAILED": "設 Default Hold 失敗，這張單沒有防守。",
         "RELEASE_FAILED": "解除 Default Hold 失敗，Hold 還在。",
         "NEED_BACKUP_HOLD": "這個 Hold Code 設不上，會改用下一個 Code。",
@@ -597,11 +598,10 @@ STATE_PURPOSE = {
     "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個",
     "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES",
     "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold",
-    "WAIT_AI": "已設 Default Hold，等所有 Wafer 判斷完 SMM",
+    "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘",
     "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解",
-    "READY_RELEASE_OK": "整批 OK，可以申請解除 Default Hold",
+    "READY_RELEASE_OK": "可以申請解除 Default Hold",
     "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold",
-    "DEFECT_HOLD_UNCONFIRMED": "有 Defect 但 SMM Hold 還沒接手，不解 Default Hold",
     "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上",
     "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗",
     "RELEASE_FAILED": "解除失敗，Hold 還在",
@@ -934,7 +934,7 @@ def _index_machine(link_prefix: str) -> str:
   CLOSED --> [*]
   NEED_HOLD --> HOLD_VERIFY_PENDING: C07 改用下一個 Hold Code
   WAIT_AI --> CLOSED: C08 線上代解
-  WAIT_AI --> DEFECT_HOLD_UNCONFIRMED: C09 無 SMM Hold 不解
+  WAIT_AI --> RELEASE_SENT: C09 無 SMM Hold 逾時解
   WAIT_AI --> RELEASE_SENT: C10 有 SMM Hold 後申請解除
   RELEASE_VERIFY_PENDING --> CLOSED: C11 確認已解除（SMM 仍在）
 {notes}
