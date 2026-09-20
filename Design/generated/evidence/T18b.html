@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>T18b — 不把那筆當自己的；依備援清單送 OTHL，再查驗 OTHL</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { htmlLabels: true } });
+    document.addEventListener("DOMContentLoaded", () => {
+      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等所有 Wafer 判斷完 SMM", "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解", "READY_RELEASE_OK": "整批 OK，可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold", "DEFECT_HOLD_UNCONFIRMED": "有 Defect 但 SMM Hold 還沒接手，不解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
+      const applyTips = () => {
+        document.querySelectorAll("svg .stateLabel, svg .nodeLabel, svg text").forEach((el) => {
+          const t = (el.textContent || "").trim().split(/\s|\n/)[0];
+          if (purpose[t] && !el.querySelector("title")) {
+            const n = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            n.textContent = t + " — " + purpose[t];
+            el.appendChild(n);
+          }
+        });
+      };
+      setTimeout(applyTips, 800);
+    });
+  </script>
+  <style>
+    body { font-family: "Segoe UI","Noto Sans TC",sans-serif; margin:0; background:#f4f1ea; color:#1c1917; }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.45rem; margin-bottom: 8px; }
+    h2 { font-size: 1.08rem; color: #0f766e; }
+    .muted { color:#57534e; }
+    .card { background:#fff; border-radius:12px; padding:18px 20px; margin:16px 0; border:1px solid #e7e5e4; }
+    .card.focus { border-color:#b45309; box-shadow: 0 0 0 3px #fed7aa; }
+    table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+    td, th { border-bottom:1px solid #e7e5e4; padding:8px 6px; text-align:left; vertical-align:top; }
+    pre { background:#1c1917; color:#fafaf9; padding:12px; border-radius:10px; overflow:auto; font-size:0.78rem; }
+    .mermaid { background:#fafaf9; border-radius:8px; padding:8px; overflow:auto; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.82rem; }
+    .badge.pass { background:#d1fae5; color:#065f46; }
+    .badge.fail { background:#fee2e2; color:#991b1b; }
+    .badge.none { background:#e7e5e4; color:#44403c; }
+    a { color:#0f766e; }
+    tr.row:hover { background:#fafaf9; }
+    tr.env td:first-child { color:#78716c; }
+    tr.act td:first-child { color:#0f766e; font-weight:600; }
+    .err { color:#9a3412; font-weight:600; }
+    table.kv th { width:28%; color:#57534e; font-weight:500; }
+    .story { font-size:1.02rem; line-height:1.55; }
+    .times { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .times .box { background:#fafaf9; border-radius:8px; padding:10px 12px; }
+    .spec { border-color:#0f766e; }
+    .spec h2 { margin-top:0; }
+    .spec ul { margin:6px 0 12px 1.2em; }
+    .spec .must { color:#065f46; }
+    .spec .not { color:#9a3412; }
+    .spec .passwhen { background:#ecfdf5; padding:8px 10px; border-radius:8px; }
+    .spec .open { background:#fff7ed; padding:8px 10px; border-radius:8px; color:#9a3412; }
+    tr.when { background:#ccfbf1; }
+    tr.given { color:#78716c; }
+    .verdict { padding:16px 18px; border-radius:12px; margin:16px 0; font-size:1.15rem; font-weight:700; }
+    .verdict.pass { background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
+    .verdict.fail { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+    .verdict .sub { font-size:0.92rem; font-weight:500; margin-top:8px; color:inherit; opacity:0.9; }
+    .facts-grid { display:grid; gap:12px; }
+    .facts-grid h3 { margin:0 0 6px; font-size:0.95rem; color:#0f766e; }
+    .milestones { table-layout:fixed; }
+    .milestones th, .milestones td { text-align:center; font-size:0.82rem; }
+    .milestones td.hit { background:#ccfbf1; font-weight:600; }
+    .milestones td.here { background:#fde68a; font-weight:700; }
+    .milestones td.err { background:#ffedd5; color:#9a3412; font-weight:700; }
+    .milestones td.skip { color:#a8a29e; }
+    .milestones td.then { background:#d1fae5; font-weight:700; color:#065f46; }
+    tr.drive td { background:#fef3c7; }
+    .yes { color:#065f46; font-weight:600; }
+    .no { color:#9a3412; }
+    .bridge-out { background:#ecfdf5; padding:12px 14px; border-radius:8px; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <p><a href="index.html">← 全部情境</a></p>
+  <h1>T18b　不把那筆當自己的；依備援清單送 OTHL，再查驗 OTHL</h1>
+  <p class="muted">別人的 ENHL 不是我們的，自己的 ENHL 設不上就試 OTHL · <strong>沒有重跑模擬</strong></p>
+  
+</header>
+<main>
+  <div class="card spec">
+    <h2>這題要做什麼</h2>
+    <table>
+      <tr><th>現場已經</th><td>別人的 ENHL（不同 Memo）還在；我們送 ENHL 被 MES 衝突拒絕、沒設上。</td></tr>
+      <tr><th>實際系統會做</th><td><strong>不把那筆當自己的；依備援清單送 OTHL，再查驗 OTHL。</strong></td></tr>
+      <tr><th>做完現場應看到</th><td>本單用 OTHL 保護；別人的 ENHL 還在。</td></tr>
+      <tr><th>禁止</th><td>解掉別人的 ENHL，或把那筆 ENHL 標成已確認。</td></tr>
+    </table>
+    
+    <p class='muted'>規格原文：情境「他人 ENHL、Memo 不同，且自己的 ENHL 設不上」／預期「不視為本 Order Hold；改送 OTHL 防守」／禁止「解除或冒領別人的 Hold」。</p>
+  </div>
+  <div class="verdict pass">結論：與預期相符
+    <div class="sub"><strong>實際系統做了：</strong>向 MES 確認 Default Hold 是否存在。</div>
+    <div class="sub"><strong>現在：</strong>Default Hold 已在 MES 上確認存在，正在等所有 wafer 掃完。</div>
+  </div>
+  
+  <div class="card">
+    <h2>這張單走到哪裡</h2>
+    <p class="muted">時間軸，不是「Hold 已經在現場」。有時間＝這一步做過；—＝還沒做。「送出」不是「已確認存在」。黃底＝這題停在這裡。</p>
+    
+    <table class="milestones"><thead><tr><th>進站</th><th>送出 Default Hold</th><th>確認 Default Hold 存在</th><th>確認 SMM Hold 存在</th><th>解除 Default Hold</th><th>確認解除 Default Hold</th><th>結案</th></tr></thead>
+    <tbody><tr><td class='hit'>2026-03-18 06:14:37 UTC</td><td class='hit'>2026-03-18 06:16:00 UTC</td><td class='hit here'>2026-03-18 06:19:00 UTC</td><td class=''>—</td><td class=''>—</td><td class=''>—</td><td class=''>—</td></tr></tbody></table>
+  </div>
+
+  
+  <div class="card focus">
+    <h2>為什麼做這一步</h2>
+    <p class="muted">這是<strong>原因</strong>，不是時間軸。黃底＝做決定時看到的條件。綠底＝因此去做的事。送出的內容在「待查驗」，不在這裡。</p>
+    <table class="milestones"><thead><tr><th>本系統 Default Hold</th><th>因此做了</th></tr></thead>
+    <tbody><tr><td class='here'>有（ENHL）</td><td class='then'>向 MES 確認 Default Hold 是否存在</td></tr></tbody></table>
+  </div>
+
+  
+  <div class="card">
+    <h2>已觀察到的現場（Facts）</h2>
+    <p class="muted">只放這一格有查過、並且採信的東西。沒查過的不列。</p>
+    <div class="facts-grid"><div><h3>Lot</h3><p class='muted'>進站時間是 Operation Start。不是 Hold 時間。</p><pre>{
+  &quot;LotId&quot;: &quot;LOT1&quot;,
+  &quot;OpeNo&quot;: &quot;OP100&quot;,
+  &quot;ReworkCount&quot;: 0,
+  &quot;ToolId&quot;: &quot;EQP01&quot;,
+  &quot;RouteId&quot;: &quot;RT1&quot;,
+  &quot;OperationStartTime&quot;: &quot;2026-03-18T06:14:37Z&quot;
+}</pre></div><div><h3>DefaultHold</h3><p class='muted'>已向 MES 查驗、確認是本系統 Default Hold 的那一筆（或確認已經沒有）。</p><pre>{
+  &quot;QueryStatus&quot;: &quot;FOUND&quot;,
+  &quot;Holds&quot;: [
+    {
+      &quot;OpeNo&quot;: &quot;OP200&quot;,
+      &quot;OpeName&quot;: &quot;August&quot;,
+      &quot;RouteId&quot;: &quot;RT1&quot;,
+      &quot;HoldCode&quot;: &quot;ENHL&quot;,
+      &quot;HoldUser&quot;: &quot;ABO&quot;,
+      &quot;HoldMemo&quot;: &quot;SOME OTHER MEMO&quot;
+    },
+    {
+      &quot;OpeNo&quot;: &quot;OP200&quot;,
+      &quot;OpeName&quot;: &quot;August&quot;,
+      &quot;RouteId&quot;: &quot;RT1&quot;,
+      &quot;HoldCode&quot;: &quot;OTHL&quot;,
+      &quot;HoldUser&quot;: &quot;ABO&quot;,
+      &quot;HoldMemo&quot;: &quot;SMM Default Hold : SMM will auto release this hold, if this hold not auto release &gt; 30 mins , please contact LIT onduty to manual release it.&quot;
+    }
+  ]
+}</pre></div></div>
+  </div>
+  <div class="card">
+    <h2>發生了什麼</h2>
+    <p class="muted">灰＝現場進站；青＝本系統對 MES 做的事。這不是「Hold 已在現場」。</p>
+    <table><thead><tr><th>#</th><th>時間</th><th>發生什麼</th></tr></thead>
+    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>現場已經：Lot 進站 LOT1 OP100（Operation Start）</td></tr><tr class='env'><td>2</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>現場已經：MES 已有別人的 Hold（Memo 不是本系統）</td></tr><tr class='env'><td>3</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>現場已經：MES 拒絕：Hold Code 衝突</td></tr><tr class='given'><td>4</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>上一格已經：設 Default Hold</td></tr><tr class='given'><td>5</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>上一格已經：查驗 Default Hold 是否還在</td></tr><tr class='env'><td>6</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>現場已經：MES 接受 Hold</td></tr><tr class='given'><td>7</td><td><code>2026-03-18 06:18:00 UTC</code></td><td>上一格已經：設 Default Hold</td></tr><tr class='act when'><td>8</td><td><code>2026-03-18 06:19:00 UTC</code></td><td>查驗 Default Hold 是否還在</td></tr></tbody></table>
+  </div>
+  <details class="card"><summary>給對程式的人（狀態機、路徑、檔名、對照明細）</summary>
+    <div class="card spec">
+    <h2>狀態機</h2>
+    <p class="muted">每一格＝一支 Cron。狀態寫在 Order DB，下一分鐘再推下一格。</p>
+    <pre class="mermaid">
+stateDiagram-v2
+  [*] --> NEED_HOLD
+  NEED_HOLD --> HOLD_VERIFY_PENDING: 1. SET Hold
+  HOLD_VERIFY_PENDING --> NEED_BACKUP_HOLD: 2. CONFIRM 存在
+  NEED_BACKUP_HOLD --> HOLD_VERIFY_PENDING: 3. SET Hold
+  HOLD_VERIFY_PENDING --> WAIT_AI: 4. CONFIRM 存在
+  state "NEED_HOLD<br/>起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）" as NEED_HOLD
+  state "HOLD_VERIFY_PENDING<br/>已送出、這格不查它在不在；下一格才查 MES" as HOLD_VERIFY_PENDING
+  state "NEED_BACKUP_HOLD<br/>這個 Code 沒設上，改試清單下一個" as NEED_BACKUP_HOLD
+  state "WAIT_AI<br/>已設 Default Hold，等所有 Wafer 判斷完 SMM" as WAIT_AI
+
+    </pre>
+  </div>
+    <h3>路徑</h3>
+    <pre class="mermaid">
+flowchart TB
+  classDef env fill:#e7e5e4,stroke:#78716c,color:#44403c
+  classDef act fill:#ccfbf1,stroke:#0f766e,color:#134e4a
+  classDef endn fill:#fde68a,stroke:#b45309
+  n1(["<span style='color:#0f766e;font-weight:700'>1. Lot 進站 LOT1 OP100（Operation Start）</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:14:37 UTC<br/>pipelines/set_default_hold.py:run<br/>SmmPort.list_start_events</span>"])
+  n2(["<span style='color:#0f766e;font-weight:700'>2. MES 已有別人的 Hold（Memo 不是本系統）</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:14:37 UTC<br/>domain/ownership.py:match_our_holds<br/>HoldPort.list_holds<br/>SOME OTHER MEMO</span>"])
+  n1 --> n2
+  n3(["<span style='color:#0f766e;font-weight:700'>3. MES 拒絕：Hold Code 衝突</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:14:37 UTC<br/>HoldPort.set_hold</span>"])
+  n2 --> n3
+  n4(["<span style='color:#0f766e;font-weight:700'>4. 設 Default Hold</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:16:00 UTC<br/>pipelines/set_default_hold.py:run<br/>usecases/request_hold.py:request_hold<br/>HoldPort.set_hold</span>"])
+  n3 --> n4
+  n5(["<span style='color:#0f766e;font-weight:700'>5. 查驗 Default Hold 是否還在</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:17:00 UTC<br/>pipelines/confirm_hold.py:run<br/>usecases/verify_hold.py:verify_hold<br/>HoldPort.list_holds</span>"])
+  n4 --> n5
+  n6(["<span style='color:#0f766e;font-weight:700'>6. MES 接受 Hold</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:17:00 UTC<br/>HoldPort.set_hold</span>"])
+  n5 --> n6
+  n7(["<span style='color:#0f766e;font-weight:700'>7. 設 Default Hold</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:18:00 UTC<br/>pipelines/set_default_hold.py:run<br/>usecases/request_hold.py:request_hold<br/>HoldPort.set_hold</span>"])
+  n6 --> n7
+  n8["<span style='color:#0f766e;font-weight:700'>8. 查驗 Default Hold 是否還在</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:19:00 UTC<br/>pipelines/confirm_hold.py:run<br/>usecases/verify_hold.py:verify_hold<br/>HoldPort.list_holds</span>"]
+  n7 --> n8
+  e0["結果 WAIT_AI / A2-02"]
+  n8 --> e0
+  class n1,n2,n3,n4,n5,n6,n7 env
+  class n8 act
+  class e0 endn
+
+    </pre>
+    <h3>劇本（含 file:function）</h3>
+    <table><thead><tr><th>#</th><th>時間</th><th>發生什麼</th><th>file:function</th><th>Port</th></tr></thead>
+    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>Lot 進站 LOT1 OP100（Operation Start）</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>SmmPort.list_start_events</code></td><td></td></tr><tr class='env'><td>2</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>MES 已有別人的 Hold（Memo 不是本系統）</td><td><code>domain/ownership.py:match_our_holds</code><br/><code>HoldPort.list_holds</code></td><td>SOME OTHER MEMO</td></tr><tr class='env'><td>3</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>MES 拒絕：Hold Code 衝突</td><td><code>HoldPort.set_hold</code></td><td></td></tr><tr class='given'><td>4</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>設 Default Hold</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>usecases/request_hold.py:request_hold</code></td><td>HoldPort.set_hold</td></tr><tr class='given'><td>5</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>查驗 Default Hold 是否還在</td><td><code>pipelines/confirm_hold.py:run</code><br/><code>usecases/verify_hold.py:verify_hold</code></td><td>HoldPort.list_holds</td></tr><tr class='env'><td>6</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>MES 接受 Hold</td><td><code>HoldPort.set_hold</code></td><td></td></tr><tr class='given'><td>7</td><td><code>2026-03-18 06:18:00 UTC</code></td><td>設 Default Hold</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>usecases/request_hold.py:request_hold</code></td><td>HoldPort.set_hold</td></tr><tr class='act when'><td>8</td><td><code>2026-03-18 06:19:00 UTC</code></td><td>查驗 Default Hold 是否還在</td><td><code>pipelines/confirm_hold.py:run</code><br/><code>usecases/verify_hold.py:verify_hold</code></td><td>HoldPort.list_holds</td></tr></tbody></table>
+    <details class="card"><summary>對照明細（可略過；結論已寫在上面）</summary>
+    <p class="muted">題目規定要對上的欄位，對這次跑完的結果。通過時不必逐列看。</p>
+    <table><thead><tr><th>檢查什麼</th><th>題目規定</th><th>這次跑完</th></tr></thead><tbody><tr><td><code>protection_state</code></td><td><code>CONFIRMED</code></td><td><code>CONFIRMED</code></td></tr><tr><td><code>work_state</code></td><td><code>WAIT_AI</code></td><td><code>WAIT_AI</code></td></tr><tr><td><code>actions</code></td><td><pre>{
+  &quot;set_hold&quot;: 2,
+  &quot;release&quot;: 0
+}</pre></td><td><pre>{
+  &quot;set_hold&quot;: 2,
+  &quot;release&quot;: 0,
+  &quot;transfer&quot;: 0
+}</pre></td></tr><tr><td><code>command_count</code></td><td><pre>{
+  &quot;SET_HOLD&quot;: 2
+}</pre></td><td><pre>{
+  &quot;SET_HOLD&quot;: 2,
+  &quot;SET_RELEASE&quot;: 0,
+  &quot;TRANSFER_HOLD&quot;: 0
+}</pre></td></tr></tbody></table>
+  </details>
+    <h3>actions</h3>
+    <pre>{
+  &quot;set_hold&quot;: 2,
+  &quot;release&quot;: 0,
+  &quot;transfer&quot;: 0
+}</pre>
+    <p class="muted">scenario_run 2026-09-20T01:06:56Z</p>
+  </details>
+  <div class='card spec'><h2>失敗原因</h2><p class='story'>ENHL 被 MES CODE_CONFLICT</p><p class='muted'>沒有寫入 incident 列。</p><h2>action_history 每一筆失敗</h2><table><thead><tr><th>Hold Code</th><th>attempt</th><th>receipt</th><th>error</th><th>retry_class</th><th>時間</th></tr></thead><tbody><tr><td><code>ENHL</code></td><td>1</td><td>REJECTED</td><td>CODE_CONFLICT</td><td>CODE_CONFLICT</td><td>2026-03-18 06:16:00 UTC</td></tr></tbody></table></div>
+</main>
+</body>
+</html>

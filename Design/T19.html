@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>情境 T19 — 已確認 Hold 消失</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+  </script>
+  <style>
+    body { font-family: "Segoe UI","Noto Sans TC",sans-serif; margin:0; background:#f4f1ea; color:#1c1917; }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.45rem; margin-bottom: 8px; }
+    h2 { font-size: 1.08rem; color: #0f766e; }
+    .muted { color:#57534e; }
+    .card { background:#fff; border-radius:12px; padding:18px 20px; margin:16px 0; border:1px solid #e7e5e4; }
+    .card.focus { border-color:#b45309; box-shadow: 0 0 0 3px #fed7aa; }
+    table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+    td, th { border-bottom:1px solid #e7e5e4; padding:8px 6px; text-align:left; vertical-align:top; }
+    pre { background:#1c1917; color:#fafaf9; padding:12px; border-radius:10px; overflow:auto; font-size:0.78rem; }
+    .mermaid { background:#fafaf9; border-radius:8px; padding:8px; overflow:auto; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.82rem; }
+    .badge.pass { background:#d1fae5; color:#065f46; }
+    .badge.fail { background:#fee2e2; color:#991b1b; }
+    .story { font-size:1.02rem; line-height:1.55; }
+  </style>
+</head>
+<body>
+<header>
+  <p class="muted">來源：<code>Design/generated/scenario_catalog.sqlite</code>
+     的 <code>scenario</code> + 最近一次 <code>scenario_run</code>（2026-09-19T04:30:18Z）。
+     <strong>沒有重跑模擬</strong>。</p>
+  <p class="muted">SQLite 情境庫 · 第 19 筆 · group=<code>hold</code></p>
+  <h1>T19　已確認 Hold 消失</h1>
+  <p><span class="badge pass">庫裡這次 run 已對上 Expect</span>
+     work_state=<code>HOLD_MISSING</code>
+     last_rule=<code>A2-04</code>
+     incidents=<code>[&#x27;HOLD_MISSING&#x27;]</code></p>
+  <p class="story">先建單並確認 Default Hold，再把 MES 上的 Hold 清掉（未授權消失）。
+  系統必須看成「曾經有、現在沒了」→ <code>HOLD_MISSING</code> / A2-04，不能當成沒設過，也不能偷偷再 SET 一次。</p>
+</header>
+<main>
+  <div class="card">
+    <h2>劇本（scenario.script，當時撈去跑的）</h2>
+    <table><thead><tr><th>#</th><th>步驟</th><th>原始 op</th></tr></thead><tbody><tr><td>1</td><td>灌進站 Lot（SMM Operation Start）</td><td><code>{&quot;op&quot;: &quot;add_lot&quot;, &quot;lot_id&quot;: &quot;LOT1&quot;}</code></td></tr><tr><td>2</td><td>跑 SET_DEFAULT_HOLD_BY_Operation_Start</td><td><code>{&quot;op&quot;: &quot;run&quot;, &quot;fn&quot;: &quot;set&quot;}</code></td></tr><tr><td>3</td><td>跑 CONFIRM_DEFAULT_HOLD_EXISTS</td><td><code>{&quot;op&quot;: &quot;run&quot;, &quot;fn&quot;: &quot;confirm&quot;}</code></td></tr><tr><td>4</td><td>模擬 MES：本系統 Default Hold 被清掉</td><td><code>{&quot;op&quot;: &quot;clear_holds&quot;}</code></td></tr><tr><td>5</td><td>跑 CONFIRM_DEFAULT_HOLD_EXISTS</td><td><code>{&quot;op&quot;: &quot;run&quot;, &quot;fn&quot;: &quot;confirm&quot;}</code></td></tr><tr><td>6</td><td>跑 CHECK_AI_SCAN_COMPLETE</td><td><code>{&quot;op&quot;: &quot;run&quot;, &quot;fn&quot;: &quot;check&quot;}</code></td></tr><tr><td>7</td><td>跑 SMM_EXCEPTION_DEFENSE</td><td><code>{&quot;op&quot;: &quot;run&quot;, &quot;fn&quot;: &quot;defense&quot;}</code></td></tr></tbody></table>
+  </div>
+  <div class="card">
+    <h2>路徑（script → 庫裡的結果）</h2>
+    <pre class="mermaid">
+flowchart TB
+  s1["1. 灌進站 Lot（SMM Operation Start）"]
+  s2["2. 跑 SET_DEFAULT_HOLD_BY_Operation_Start"]
+  s1 --> s2
+  s3["3. 跑 CONFIRM_DEFAULT_HOLD_EXISTS"]
+  s2 --> s3
+  s4["4. 模擬 MES：本系統 Default Hold 被清掉"]
+  s3 --> s4
+  s5["5. 跑 CONFIRM_DEFAULT_HOLD_EXISTS"]
+  s4 --> s5
+  s6["6. 跑 CHECK_AI_SCAN_COMPLETE"]
+  s5 --> s6
+  s7["7. 跑 SMM_EXCEPTION_DEFENSE"]
+  s6 --> s7
+  e0["結果 HOLD_MISSING / A2-04"]
+  s7 --> e0
+  style e0 fill:#fde68a,stroke:#b45309
+
+    </pre>
+  </div>
+  <div class="card">
+    <h2>Expect vs 庫裡 actual</h2>
+    <table><thead><tr><th>欄位</th><th>Expect</th><th>scenario_run.actual_json</th></tr></thead><tbody><tr><td><code>work_state</code></td><td><code>HOLD_MISSING</code></td><td><code>HOLD_MISSING</code></td></tr><tr><td><code>incidents</code></td><td><pre>[
+  &quot;HOLD_MISSING&quot;
+]</pre></td><td><pre>[
+  &quot;HOLD_MISSING&quot;
+]</pre></td></tr></tbody></table>
+  </div>
+  <div class="card focus">
+    <h2>跑完後 snapshot 的 Facts（庫裡存的）</h2>
+    <table>
+      <tr><th>DefaultHold.QueryStatus</th><td><code>NOT_FOUND</code></td></tr>
+      <tr><th>DefaultHold.Holds</th><td><pre>[]</pre></td></tr>
+      <tr><th>actions</th><td><pre>{
+  &quot;set_hold&quot;: 1,
+  &quot;release&quot;: 0,
+  &quot;transfer&quot;: 0
+}</pre></td></tr>
+    </table>
+    <table><thead><tr><th>Facts 區塊</th><th>值</th></tr></thead><tbody><tr><td><code>Lot</code></td><td><pre>{
+  &quot;LotId&quot;: &quot;LOT1&quot;,
+  &quot;OpeNo&quot;: &quot;OP100&quot;,
+  &quot;ReworkCount&quot;: 0,
+  &quot;ToolId&quot;: &quot;EQP01&quot;,
+  &quot;RouteId&quot;: &quot;RT1&quot;,
+  &quot;OperationStartTime&quot;: &quot;2026-01-01T00:00:00Z&quot;,
+  &quot;RecTime&quot;: &quot;2026-01-01T00:00:00Z&quot;
+}</pre></td></tr><tr><td><code>DefaultHold</code></td><td><pre>{
+  &quot;QueryStatus&quot;: &quot;NOT_FOUND&quot;,
+  &quot;Holds&quot;: []
+}</pre></td></tr><tr><td><code>SmmHold</code></td><td><pre>{
+  &quot;StepMode&quot;: &quot;DefaultHoldStep&quot;,
+  &quot;StepOpeNo&quot;: &quot;OP200&quot;,
+  &quot;QueryStatus&quot;: &quot;NOT_FOUND&quot;,
+  &quot;Holds&quot;: []
+}</pre></td></tr><tr><td><code>AiScan</code></td><td><pre>{
+  &quot;QueryStatus&quot;: &quot;NOT_FOUND&quot;,
+  &quot;ExpectedCount&quot;: 25,
+  &quot;ScannedCount&quot;: 0,
+  &quot;LatestScanTime&quot;: null,
+  &quot;RecTime&quot;: &quot;2026-01-01T00:00:00Z&quot;
+}</pre></td></tr><tr><td><code>Flow</code></td><td><pre>{
+  &quot;MainPdId&quot;: &quot;RT1&quot;,
+  &quot;FutureHoldStep&quot;: &quot;OP200&quot;,
+  &quot;FutureHoldOpeName&quot;: &quot;August&quot;
+}</pre></td></tr><tr><td><code>OrderDb</code></td><td><pre>{
+  &quot;OrderId&quot;: &quot;20260101-000000187-EQP01&quot;,
+  &quot;Bindings&quot;: [
+    {
+      &quot;Status&quot;: &quot;CONFIRMED&quot;,
+      &quot;Role&quot;: &quot;PREVENTIVE&quot;,
+      &quot;RouteId&quot;: &quot;RT1&quot;,
+      &quot;OpeNo&quot;: &quot;OP200&quot;,
+      &quot;HoldCode&quot;: &quot;ENHL&quot;,
+      &quot;HoldUser&quot;: &quot;ABO&quot;,
+      &quot;BackupHoldOrder&quot;: 1,
+      &quot;TimeQuality&quot;: &quot;ESTIMATED&quot;,
+      &quot;RequestedAt&quot;: &quot;2026-01-01T00:00:00Z&quot;,
+      &quot;FirstConfirmedAt&quot;: &quot;2026-01-01T00:00:00Z&quot;
+    }
+  ],
+  &quot;RemainingHoldCodes&quot;: [
+    &quot;OTHL&quot;
+  ],
+  &quot;ActionInFlight&quot;: null,
+  &quot;ControlMode&quot;: &quot;ENABLED&quot;
+}</pre></td></tr></tbody></table>
+  </div>
+</main>
+</body>
+</html>

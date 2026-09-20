@@ -1,0 +1,60 @@
+# Vision AI Preventive Hold — 執行設定範例
+# 正式／現場值放各環境自己的 yaml，不要把信箱與連線寫進程式。
+
+runtime:
+  mode: DEV                 # DEV | PROD；缺省或拼錯則啟動失敗
+
+# 測試／試跑准許名單：只處理這些 Lot（進站、建單、Hold／Release／Defense）。
+# 空或不寫＝不限制（正式）。不在名單的進站事件不消費，拿掉名單後仍可處理。
+# 不管 wafer；Hold 仍是 Lot 級。
+scope:
+  lot_ids: []
+#   - A123456
+
+persistence:
+  backend: sqlite           # memory | sqlite | oracle
+  sqlite_path: var/dev.db
+
+hold:
+  user: ABO
+  memo: "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it."
+  # 依序嘗試；僅在前一個 Code 明確衝突且確認沒設上時，才換下一個
+  codes:
+    - ENHL
+    - OTHL
+
+release:
+  user: ABO
+  memo: "SMM auto release Default Hold."
+
+# 選站優先序（名稱可改）；程式不得寫死 August → Overlay → CDSEM
+stations:
+  priority:
+    - August
+    - Overlay
+    - CDSEM
+
+# 正式 AI 異常 Hold：查 MES 上 HoldCode+HoldUser 是否在指定站
+smm_hold:
+  hold_code: SMMH
+  hold_user: AOA
+  # DefaultHoldStep = 與 Default Hold 同一站（例：OP200 August）
+  # NextProcessStep = 從目前加工站往後、且不含目前站，第一個 Process Tool
+  #   例：目前 OP100 → 不含 OP100，不是從 Default Hold（OP200）再往後找
+  step: DefaultHoldStep
+  # Wafer-based Defect：Lot Hold memo 累積 slot，{slots} → 1,2
+  memo_template: "Please check {slots}"
+
+# 同一 logical action（同一 idempotency_key）含第 1 次最多送 3 次。
+# ENHL→OTHL、memo #1→#1,#2 是新動作，各自再 3 次。timeout 先查驗再重送。
+action:
+  retry:
+    max_attempts: 3
+
+smm_exception_defense:
+  watchdog_minutes: 30
+  # 逾時 distinct Lot 數 > 2 才停用新 Hold → 填 3
+  disable_new_hold_after_overdue_lots: 3
+  notify:
+    emails:
+      - lit.onduty@example.com

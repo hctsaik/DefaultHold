@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>T01-SET — T01 第 1 格：SET 建單並送 Hold</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { htmlLabels: true } });
+    document.addEventListener("DOMContentLoaded", () => {
+      const purpose = {"NEED_HOLD": "還沒本系統 Hold，這一格要送出", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出，還不算生效；等查 MES 真的有", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等所有 Wafer 判斷完 SMM", "AI_RESULT_INVALID": "掃完但結果缺／無效，Hold 留著", "READY_RELEASE_OK": "整批 OK，可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold", "DEFECT_HOLD_UNCONFIRMED": "有 Defect 但 SMM Hold 還沒接手，不解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
+      const applyTips = () => {
+        document.querySelectorAll("svg .stateLabel, svg .nodeLabel, svg text").forEach((el) => {
+          const t = (el.textContent || "").trim().split(/\s|\n/)[0];
+          if (purpose[t] && !el.querySelector("title")) {
+            const n = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            n.textContent = t + " — " + purpose[t];
+            el.appendChild(n);
+          }
+        });
+      };
+      setTimeout(applyTips, 800);
+    });
+  </script>
+  <style>
+    body { font-family: "Segoe UI","Noto Sans TC",sans-serif; margin:0; background:#f4f1ea; color:#1c1917; }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.45rem; margin-bottom: 8px; }
+    h2 { font-size: 1.08rem; color: #0f766e; }
+    .muted { color:#57534e; }
+    .card { background:#fff; border-radius:12px; padding:18px 20px; margin:16px 0; border:1px solid #e7e5e4; }
+    .card.focus { border-color:#b45309; box-shadow: 0 0 0 3px #fed7aa; }
+    table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+    td, th { border-bottom:1px solid #e7e5e4; padding:8px 6px; text-align:left; vertical-align:top; }
+    pre { background:#1c1917; color:#fafaf9; padding:12px; border-radius:10px; overflow:auto; font-size:0.78rem; }
+    .mermaid { background:#fafaf9; border-radius:8px; padding:8px; overflow:auto; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.82rem; }
+    .badge.pass { background:#d1fae5; color:#065f46; }
+    .badge.fail { background:#fee2e2; color:#991b1b; }
+    .badge.none { background:#e7e5e4; color:#44403c; }
+    a { color:#0f766e; }
+    tr.row:hover { background:#fafaf9; }
+    tr.env td:first-child { color:#78716c; }
+    tr.act td:first-child { color:#0f766e; font-weight:600; }
+    .story { font-size:1.02rem; line-height:1.55; }
+    .times { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .times .box { background:#fafaf9; border-radius:8px; padding:10px 12px; }
+    .spec { border-color:#0f766e; }
+    .spec h2 { margin-top:0; }
+    .spec ul { margin:6px 0 12px 1.2em; }
+    .spec .must { color:#065f46; }
+    .spec .not { color:#9a3412; }
+    .spec .passwhen { background:#ecfdf5; padding:8px 10px; border-radius:8px; }
+    .spec .open { background:#fff7ed; padding:8px 10px; border-radius:8px; color:#9a3412; }
+    tr.when { background:#ccfbf1; }
+    tr.given { color:#78716c; }
+</style>
+</head>
+<body>
+<header>
+  <p><a href="index.html">← 全部情境</a></p>
+  <p class="muted">來源：<code>scenario_catalog.sqlite</code> 的 <code>scenario</code>
+     + 最近一次 <code>scenario_run</code>（2026-09-19T10:39:17Z）。<strong>沒有重跑模擬</strong>。</p>
+  <p class="muted">第 101 筆 · group=<code>stage</code>
+     · 狀態機單格：Given → 一支 Cron → Then。這才是驗收單位。</p>
+  <h1>T01-SET　T01 第 1 格：SET 建單並送 Hold</h1>
+  <p><span class="badge pass">庫裡這次 run 已對上 Expect</span>
+     work_state=<code>HOLD_VERIFY_PENDING</code>
+     last_rule=<code>A1-03</code>
+     incidents=<code>[]</code></p>
+  <div class="times">
+    <div class="box"><div class="muted">進站 Operation Start（訂單凍結，不隨後續步驟改）</div>
+      <code>2026-03-18 06:14:37 UTC</code></div>
+    <div class="box"><div class="muted">本機觀察 RecTime（這次 snapshot 的 Clock，不是 MES Created）</div>
+      <code>2026-03-18 06:16:00 UTC</code><br/>
+      <span class="muted">Δ +1分23秒（本機 Clock，非 MES Created）</span></div>
+  </div>
+</header>
+<main>
+  <div class="card spec">
+    <h2>這題要做什麼</h2>
+    <table>
+      <tr><th>現場已經</th><td>Lot 進站，還沒訂單、還沒本系統 Hold。</td></tr>
+      <tr><th>這輪要做</th><td><strong>只跑 SET：建單並送 ENHL。</strong></td></tr>
+      <tr><th>做完應看到</th><td>HOLD_VERIFY_PENDING；Hold 已送出，還不算已生效。</td></tr>
+      <tr><th>禁止</th><td>這一格不准看 AI、不准 Release、不准把 API 成功當 Hold 已在。</td></tr>
+    </table>
+    
+    <p class="muted">規格原文：情境「」／
+    預期「」／
+    禁止「」。
+    原文與「這輪要做」對不上就停下來問，不准自己選一種寫進測試。</p>
+  </div>
+  <div class="card spec">
+    <h2>狀態機（每一格 = 一支 Cron／function code）</h2>
+    <p class="muted">狀態存在 Order DB，不存在行程記憶體。下一分鐘另一支 job 再推下一格。T01 把四格串在同一份驗收裡，現場不會一次跑完。</p>
+    <pre class="mermaid">
+stateDiagram-v2
+  [*] --> NEED_HOLD
+  NEED_HOLD --> HOLD_VERIFY_PENDING: 1. SET Hold
+  state "NEED_HOLD<br/>還沒本系統 Hold，這一格要送出" as NEED_HOLD
+  state "HOLD_VERIFY_PENDING<br/>已送出，還不算生效；等查 MES 真的有" as HOLD_VERIFY_PENDING
+
+    </pre>
+  </div>
+  <div class="card">
+    <h2>劇本（現場時間序，不是「你該做的清單」）</h2>
+    <p class="muted">灰＝現場／MES 條件；青＝本系統 pipeline／usecase。時間是本機 Clock。</p>
+    <table><thead><tr><th>#</th><th>時間</th><th>發生什麼</th><th>file:function</th><th>Port／回覆</th></tr></thead>
+    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>Lot 進站 LOT1 OP100（Operation Start）</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>SmmPort.list_start_events</code></td><td></td></tr><tr class='act when'><td>2</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>設 Default Hold</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>usecases/request_hold.py:request_hold</code></td><td>HoldPort.set_hold</td></tr></tbody></table>
+  </div>
+  <div class="card">
+    <h2>路徑（script → 庫裡的結果）</h2>
+    <pre class="mermaid">
+flowchart TB
+  classDef env fill:#e7e5e4,stroke:#78716c,color:#44403c
+  classDef act fill:#ccfbf1,stroke:#0f766e,color:#134e4a
+  classDef endn fill:#fde68a,stroke:#b45309
+  n1(["<span style='color:#0f766e;font-weight:700'>1. Lot 進站 LOT1 OP100（Operation Start）</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:14:37 UTC<br/>pipelines/set_default_hold.py:run<br/>SmmPort.list_start_events</span>"])
+  n2["<span style='color:#0f766e;font-weight:700'>2. 設 Default Hold</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:16:00 UTC<br/>pipelines/set_default_hold.py:run<br/>usecases/request_hold.py:request_hold<br/>HoldPort.set_hold</span>"]
+  n1 --> n2
+  e0["結果 HOLD_VERIFY_PENDING / A1-03"]
+  n2 --> e0
+  class n1 env
+  class n2 act
+  class e0 endn
+
+    </pre>
+  </div>
+  <div class="card">
+    <h2>Expect vs 庫裡 actual</h2>
+    <table><thead><tr><th>欄位</th><th>Expect</th><th>scenario_run.actual_json</th></tr></thead><tbody><tr><td><code>work_state</code></td><td><code>HOLD_VERIFY_PENDING</code></td><td><code>HOLD_VERIFY_PENDING</code></td></tr><tr><td><code>protection_state</code></td><td><code>SET_PENDING</code></td><td><code>SET_PENDING</code></td></tr><tr><td><code>lifecycle</code></td><td><code>OPEN</code></td><td><code>OPEN</code></td></tr><tr><td><code>actions</code></td><td><pre>{
+  &quot;set_hold&quot;: 1,
+  &quot;release&quot;: 0
+}</pre></td><td><pre>{
+  &quot;set_hold&quot;: 1,
+  &quot;release&quot;: 0,
+  &quot;transfer&quot;: 0
+}</pre></td></tr></tbody></table>
+  </div>
+  <div class="card focus">
+    <h2>跑完後 snapshot 的 Facts（庫裡存的）</h2>
+    <table>
+      <tr><th>DefaultHold.QueryStatus</th><td><code>FOUND</code></td></tr>
+      <tr><th>DefaultHold.Holds</th><td><pre>[
+  {
+    &quot;OpeNo&quot;: &quot;OP200&quot;,
+    &quot;OpeName&quot;: &quot;August&quot;,
+    &quot;RouteId&quot;: &quot;RT1&quot;,
+    &quot;HoldCode&quot;: &quot;ENHL&quot;,
+    &quot;HoldUser&quot;: &quot;ABO&quot;,
+    &quot;HoldMemo&quot;: &quot;SMM Default Hold : SMM will auto release this hold, if this hold not auto release &gt; 30 mins , please contact LIT onduty to manual release it.&quot;
+  }
+]</pre></td></tr>
+      <tr><th>actions</th><td><pre>{
+  &quot;set_hold&quot;: 1,
+  &quot;release&quot;: 0,
+  &quot;transfer&quot;: 0
+}</pre></td></tr>
+    </table>
+    <table><thead><tr><th>Facts 區塊</th><th>值</th></tr></thead><tbody><tr><td><code>Lot</code></td><td><pre>{
+  &quot;LotId&quot;: &quot;LOT1&quot;,
+  &quot;OpeNo&quot;: &quot;OP100&quot;,
+  &quot;ReworkCount&quot;: 0,
+  &quot;ToolId&quot;: &quot;EQP01&quot;,
+  &quot;RouteId&quot;: &quot;RT1&quot;,
+  &quot;OperationStartTime&quot;: &quot;2026-03-18T06:14:37Z&quot;,
+  &quot;RecTime&quot;: &quot;2026-03-18T06:16:00Z&quot;
+}</pre></td></tr><tr><td><code>DefaultHold</code></td><td><pre>{
+  &quot;QueryStatus&quot;: &quot;FOUND&quot;,
+  &quot;Holds&quot;: [
+    {
+      &quot;OpeNo&quot;: &quot;OP200&quot;,
+      &quot;OpeName&quot;: &quot;August&quot;,
+      &quot;RouteId&quot;: &quot;RT1&quot;,
+      &quot;HoldCode&quot;: &quot;ENHL&quot;,
+      &quot;HoldUser&quot;: &quot;ABO&quot;,
+      &quot;HoldMemo&quot;: &quot;SMM Default Hold : SMM will auto release this hold, if this hold not auto release &gt; 30 mins , please contact LIT onduty to manual release it.&quot;
+    }
+  ]
+}</pre></td></tr><tr><td><code>SmmHold</code></td><td><pre>{
+  &quot;StepMode&quot;: &quot;DefaultHoldStep&quot;,
+  &quot;StepOpeNo&quot;: &quot;OP200&quot;,
+  &quot;QueryStatus&quot;: &quot;FOUND&quot;,
+  &quot;Holds&quot;: []
+}</pre></td></tr><tr><td><code>AiScan</code></td><td><pre>{
+  &quot;QueryStatus&quot;: &quot;NOT_FOUND&quot;,
+  &quot;ExpectedCount&quot;: 25,
+  &quot;ScannedCount&quot;: 0,
+  &quot;LatestScanTime&quot;: null,
+  &quot;RecTime&quot;: &quot;2026-03-18T06:16:00Z&quot;
+}</pre></td></tr><tr><td><code>Flow</code></td><td><pre>{
+  &quot;MainPdId&quot;: &quot;RT1&quot;,
+  &quot;FutureHoldStep&quot;: &quot;OP200&quot;,
+  &quot;FutureHoldOpeName&quot;: &quot;August&quot;
+}</pre></td></tr><tr><td><code>OrderDb</code></td><td><pre>{
+  &quot;OrderId&quot;: &quot;20260318-061600366-EQP01&quot;,
+  &quot;Lifecycle&quot;: &quot;OPEN&quot;,
+  &quot;WorkState&quot;: &quot;HOLD_VERIFY_PENDING&quot;,
+  &quot;ProtectionState&quot;: &quot;SET_PENDING&quot;,
+  &quot;AiState&quot;: &quot;WAITING&quot;,
+  &quot;LastRuleId&quot;: &quot;A1-03&quot;,
+  &quot;StateReason&quot;: null,
+  &quot;CloseReason&quot;: null,
+  &quot;TargetOpeNo&quot;: &quot;OP200&quot;,
+  &quot;OperationStartAt&quot;: &quot;2026-03-18T06:14:37Z&quot;,
+  &quot;Bindings&quot;: [
+    {
+      &quot;Status&quot;: &quot;PENDING&quot;,
+      &quot;Role&quot;: &quot;PREVENTIVE&quot;,
+      &quot;RouteId&quot;: &quot;RT1&quot;,
+      &quot;OpeNo&quot;: &quot;OP200&quot;,
+      &quot;HoldCode&quot;: &quot;ENHL&quot;,
+      &quot;HoldUser&quot;: &quot;ABO&quot;,
+      &quot;HoldMemo&quot;: &quot;SMM Default Hold : SMM will auto release this hold, if this hold not auto release &gt; 30 mins , please contact LIT onduty to manual release it.&quot;,
+      &quot;BackupHoldOrder&quot;: 1,
+      &quot;TimeQuality&quot;: &quot;ESTIMATED&quot;,
+      &quot;RequestedAt&quot;: &quot;2026-03-18T06:16:00Z&quot;,
+      &quot;FirstConfirmedAt&quot;: null
+    }
+  ],
+  &quot;ActionInFlight&quot;: {
+    &quot;ActionType&quot;: &quot;SET_HOLD&quot;,
+    &quot;ActionState&quot;: &quot;ACKNOWLEDGED&quot;,
+    &quot;HoldCode&quot;: &quot;ENHL&quot;
+  }
+}</pre></td></tr></tbody></table>
+  </div>
+</main>
+</body>
+</html>

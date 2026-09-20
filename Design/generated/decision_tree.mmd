@@ -1,0 +1,76 @@
+flowchart TB
+  S[觀察 Snapshot]
+  A1_01_no_order["A1-01 沒有訂單 → 建單"]
+  S --> A1_01_no_order
+  A1_07_manual_review_locked["A1-07 已鎖定人工審查"]
+  A1_01_no_order -->|否| A1_07_manual_review_locked
+  A2_13_authorized_manual_close["A2-13 已授權人工結案"]
+  A1_07_manual_review_locked -->|否| A2_13_authorized_manual_close
+  D_05_closed_with_own_hold["D-05 已結案仍有本系統 Hold"]
+  A2_13_authorized_manual_close -->|否| D_05_closed_with_own_hold
+  A1_06_already_closed["A1-06 已結案"]
+  D_05_closed_with_own_hold -->|否| A1_06_already_closed
+  A2_01_set_hold_in_flight["A2-01 設 Hold 命令未查驗完"]
+  A1_06_already_closed -->|否| A2_01_set_hold_in_flight
+  A2_10_release_sent["A2-10 已送解除，MES 可能還沒跟上"]
+  A2_01_set_hold_in_flight -->|否| A2_10_release_sent
+  A2_10_release_verifying["A2-10 查驗是否已解除（允許 Delay）"]
+  A2_10_release_sent -->|否| A2_10_release_verifying
+  A2_10_release_in_flight["A2-10 解除命令未查驗完"]
+  A2_10_release_verifying -->|否| A2_10_release_in_flight
+  A2_16_transfer_in_flight["A2-16 SmmHold memo transfer 未查驗完"]
+  A2_10_release_in_flight -->|否| A2_16_transfer_in_flight
+  A2_14_hold_query_unknown["A2-14 Hold 查詢 UNKNOWN/STALE"]
+  A2_16_transfer_in_flight -->|否| A2_14_hold_query_unknown
+  A1_09_retry_same_action["A1-09 同一命令重試（最多 3 次）"]
+  A2_14_hold_query_unknown -->|否| A1_09_retry_same_action
+  A2_11_release_verified["A2-11 解除已在 MES 證實"]
+  A1_09_retry_same_action -->|否| A2_11_release_verified
+  A2_12_release_rejected_hold_remains["A2-12 解除失敗且 Hold 仍在"]
+  A2_11_release_verified -->|否| A2_12_release_rejected_hold_remains
+  A2_16_smm_memo_transfer["A2-16 Defect 片增加 → transferHold 累積 memo"]
+  A2_12_release_rejected_hold_remains -->|否| A2_16_smm_memo_transfer
+  A2_05_ai_incomplete["A2-05 有防守但 AI 未齊"]
+  A2_16_smm_memo_transfer -->|否| A2_05_ai_incomplete
+  A2_06_ai_result_invalid["A2-06 AI 結果無效"]
+  A2_05_ai_incomplete -->|否| A2_06_ai_result_invalid
+  A2_07_ai_ok["A2-07 整批 OK → 申請解除"]
+  A2_06_ai_result_invalid -->|否| A2_07_ai_ok
+  A2_08_defect_hold_handoff["A2-08 有 Defect 且 SMM Hold 已接手"]
+  A2_07_ai_ok -->|否| A2_08_defect_hold_handoff
+  A2_09_defect_without_formal_hold["A2-09 有 Defect 但 SMM Hold 未確認"]
+  A2_08_defect_hold_handoff -->|否| A2_09_defect_without_formal_hold
+  A2_04_line_released_after_confirmed["A2-04 曾確認的 Hold 被線上解掉，視為解除成功"]
+  A2_09_defect_without_formal_hold -->|否| A2_04_line_released_after_confirmed
+  A2_18_retry_exhausted["A2-18 同一命令已送滿 3 次"]
+  A2_04_line_released_after_confirmed -->|否| A2_18_retry_exhausted
+  A1_04_backup_hold_code["A1-04 換備援 Hold Code"]
+  A2_18_retry_exhausted -->|否| A1_04_backup_hold_code
+  A2_03_all_hold_codes_failed["A2-03 所有 Code 失敗"]
+  A1_04_backup_hold_code -->|否| A2_03_all_hold_codes_failed
+  A1_08_new_holds_disabled["A1-08 停用新 Default Hold"]
+  A2_03_all_hold_codes_failed -->|否| A1_08_new_holds_disabled
+  A1_07_flow_unknown["A1-07 Flow 讀不到"]
+  A1_08_new_holds_disabled -->|否| A1_07_flow_unknown
+  A1_07_cannot_select_target["A1-07 選不到防守站"]
+  A1_07_flow_unknown -->|否| A1_07_cannot_select_target
+  A1_02_select_hold_target["A1-02 尚未選站"]
+  A1_07_cannot_select_target -->|否| A1_02_select_hold_target
+  A1_02_flow_changed_reselect["A1-02 Flow 變了重選站"]
+  A1_02_select_hold_target -->|否| A1_02_flow_changed_reselect
+  A1_03_need_preventive_hold["A1-03 送出 Default Hold"]
+  A1_02_flow_changed_reselect -->|否| A1_03_need_preventive_hold
+  subgraph OUTCOME[查驗與 Defense 結果]
+    A2_02_hold_confirmed["A2-02 MES 對上本系統 Hold"]
+    A2_11_release_confirmed["A2-11 MES 已無本系統 Hold → CLOSED"]
+    A2_12_release_failed["A2-12 解除被拒"]
+    D_01_HOLD_OVERDUE["D-01 Hold > 30 分"]
+    D_02_control_disabled["D-02 第 3 批超時停用"]
+    D_03_COVERAGE_MISMATCH["D-03 應守 vs 實守不一致"]
+    D_04_hold_orphan["D-04 有 Default Hold 無訂單"]
+    D_05_STATE_CONFLICT["D-05 結案仍有 Hold"]
+    D_06_agent_stall["D-06 主路徑心跳過期"]
+  end
+  A2_01_set_hold_in_flight --> A2_02_hold_confirmed
+  A2_10_release_in_flight --> A2_11_release_confirmed
+  A2_07_ai_ok --> A2_11_release_confirmed
