@@ -47,7 +47,8 @@ def test_export_order_sqlite_has_c09_error_and_dot_slot(tmp_path):
     assert c09["close_reason"] == "SCAN_COMPLETED"
     assert not c09["data_error"]
     wafers = conn.execute(
-        "SELECT wafer_id FROM order_wafer WHERE order_id=? ORDER BY wafer_id",
+        "SELECT json_extract(j.value, '$.wafer_id') AS wafer_id "
+        "FROM hold_order o, json_each(o.wafers_json) j WHERE o.order_id=? ORDER BY 1",
         (c09["order_id"],),
     ).fetchall()
     ids = [r["wafer_id"] for r in wafers]

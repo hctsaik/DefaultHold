@@ -54,7 +54,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000289-EQP01",
+    "OrderId": "20260101-000000739-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "NEED_HOLD",
     "ProtectionState": "NONE",
@@ -127,7 +127,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000289-EQP01",
+    "OrderId": "20260101-000000739-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "HOLD_VERIFY_PENDING",
     "ProtectionState": "SET_PENDING",

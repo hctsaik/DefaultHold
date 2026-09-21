@@ -455,7 +455,9 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
                 close_reason = close_reason or (o["close_reason"] if "close_reason" in keys else None)
                 here = here or (o["work_state"] if "work_state" in keys else "")
             row = conn.execute(
-                "SELECT created_at FROM mes_action WHERE action_type='SET_HOLD' ORDER BY created_at LIMIT 1"
+                """SELECT json_extract(j.value, '$.created_at') FROM hold_order o, json_each(o.actions_json) j
+                   WHERE json_extract(j.value, '$.action_type')='SET_HOLD'
+                   ORDER BY 1 LIMIT 1"""
             ).fetchone()
             if row:
                 marks["送出 Default Hold"] = row[0]
@@ -465,7 +467,9 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
             if row:
                 marks["確認 Default Hold 存在"] = row[0]
             row = conn.execute(
-                "SELECT created_at FROM mes_action WHERE action_type='SET_RELEASE' ORDER BY created_at LIMIT 1"
+                """SELECT json_extract(j.value, '$.created_at') FROM hold_order o, json_each(o.actions_json) j
+                   WHERE json_extract(j.value, '$.action_type')='SET_RELEASE'
+                   ORDER BY 1 LIMIT 1"""
             ).fetchone()
             if row:
                 marks["解除 Default Hold"] = row[0]

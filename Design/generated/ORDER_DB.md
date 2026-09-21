@@ -24,7 +24,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 | A123460 | CLOSED |  | CLOSED | SCAN_COMPLETED | A2-11 |
 | A123461 | MANUAL_CLOSED |  | MANUAL_CLOSED | MANUAL | A2-04 |
 
-## order_wafer（含 parse 出的片號）
+## wafers_json（含 parse 出的片號）
 
 | lot_id | wafer_id | slot# | ai_result |
 | --- | --- | --- | --- |
@@ -58,5 +58,6 @@ SELECT lot_id, work_state, data_error, lifecycle, close_reason FROM v_order_over
 SELECT * FROM v_order_errors;
 SELECT * FROM v_wafer_flags;
 SELECT * FROM v_open_incidents;
-SELECT lot_id, wafer_id, ai_result, scan_completed_at FROM order_wafer ORDER BY lot_id, wafer_id;
+SELECT lot_id, json_extract(j.value,'$.wafer_id'), json_extract(j.value,'$.ai_result')
+FROM hold_order, json_each(wafers_json) j;
 ```

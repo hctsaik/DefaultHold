@@ -1,7 +1,8 @@
--- Vision AI Preventive Hold — Oracle DDL
--- 正式表名：MV_NXT_DEF_HOLD_ORDER_BT / MV_NXT_DEF_HOLD_INCIDENT_BT
--- 整廠開關：重用 MV_NXT_PARAM_BT（不建 agent_control；key 見 DEFAULT_HOLD_*）
--- 欄位／索引與 sqlite.sql 對齊（短名 hold_order／incident）。加欄必須兩份一起改。
+-- Vision AI Preventive Hold — Oracle DDL（DBA 只建這兩張）
+--   MV_NXT_DEF_HOLD_ORDER_BT
+--   MV_NXT_DEF_HOLD_INCIDENT_BT
+-- 整廠開關：重用 MV_NXT_PARAM_BT（不建新表；key = DEFAULT_HOLD_*）
+-- 欄位與 sqlite.sql 的 hold_order／incident 對齊。加欄必須兩份一起改。
 -- 目標：Oracle 19c+。連線後建議：ALTER SESSION SET TIME_ZONE = 'UTC';
 
 CREATE TABLE MV_NXT_DEF_HOLD_ORDER_BT (
@@ -48,6 +49,8 @@ CREATE TABLE MV_NXT_DEF_HOLD_ORDER_BT (
     dh_first_confirmed_at    TIMESTAMP(6) WITH TIME ZONE,
     dh_release_requested_at  TIMESTAMP(6) WITH TIME ZONE,
     dh_released_at           TIMESTAMP(6) WITH TIME ZONE,
+    wafers_json              CLOB DEFAULT '[]' NOT NULL,
+    actions_json             CLOB DEFAULT '[]' NOT NULL,
     CONSTRAINT pk_hold_order PRIMARY KEY (order_id),
     CONSTRAINT ck_hold_order_rw CHECK (rework_count >= 0),
     CONSTRAINT ck_hold_order_ver CHECK (row_version >= 1),
@@ -71,65 +74,7 @@ CREATE INDEX idx_hold_order_due ON MV_NXT_DEF_HOLD_ORDER_BT (lifecycle, next_che
 CREATE INDEX idx_hold_order_lot ON MV_NXT_DEF_HOLD_ORDER_BT (lot_id);
 CREATE INDEX idx_hold_order_work ON MV_NXT_DEF_HOLD_ORDER_BT (lifecycle, work_state);
 
-CREATE TABLE order_wafer (
-    order_id          VARCHAR2(36)  NOT NULL,
-    wafer_id          VARCHAR2(64)  NOT NULL,
-    roster_version    NUMBER(10)    NOT NULL,
-    scan_completed_at TIMESTAMP(6) WITH TIME ZONE,
-    ai_result         VARCHAR2(16),
-    defect_types      CLOB,
-    result_version    VARCHAR2(64),
-    updated_at        TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    CONSTRAINT pk_order_wafer PRIMARY KEY (order_id, wafer_id),
-    CONSTRAINT ck_order_wafer_rv CHECK (roster_version >= 1),
-    CONSTRAINT ck_order_wafer_ai CHECK (ai_result IS NULL OR ai_result IN ('OK', 'DEFECT', 'INVALID')),
-    CONSTRAINT fk_order_wafer_ord FOREIGN KEY (order_id) REFERENCES MV_NXT_DEF_HOLD_ORDER_BT (order_id)
-);
-
-CREATE TABLE mes_action (
-    attempt_id             VARCHAR2(36)   NOT NULL,
-    command_id             VARCHAR2(36)   NOT NULL,
-    order_id               VARCHAR2(36)   NOT NULL,
-    logical_action_key     VARCHAR2(256)  NOT NULL,
-    action_type            VARCHAR2(32)   NOT NULL,
-    generation             NUMBER(10),
-    hold_code              VARCHAR2(32),
-    target_occurrence      VARCHAR2(128),
-    idempotency_key        VARCHAR2(128)  NOT NULL,
-    payload_hash           VARCHAR2(64),
-    payload_json           CLOB,
-    action_state           VARCHAR2(32)   NOT NULL,
-    receipt_outcome        VARCHAR2(16),
-    expected_postcondition VARCHAR2(4000),
-    attempt_no             NUMBER(10)     NOT NULL,
-    started_at             TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    dispatched_at          TIMESTAMP(6) WITH TIME ZONE,
-    finished_at            TIMESTAMP(6) WITH TIME ZONE,
-    provider_request_id    VARCHAR2(128),
-    raw_error_code         VARCHAR2(64),
-    normalized_error       VARCHAR2(64),
-    retry_class            VARCHAR2(32),
-    raw_response_masked    CLOB,
-    actor                  VARCHAR2(64),
-    rule_id                VARCHAR2(32),
-    created_at             TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    updated_at             TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    CONSTRAINT pk_mes_action PRIMARY KEY (attempt_id),
-    CONSTRAINT ck_mes_act_no CHECK (attempt_no >= 1),
-    CONSTRAINT ck_mes_act_type CHECK (action_type IN ('SET_HOLD', 'SET_RELEASE')),
-    CONSTRAINT ck_mes_act_st CHECK (action_state IN (
-        'PREPARED', 'DISPATCHED', 'ACKNOWLEDGED',
-        'REJECTED', 'UNKNOWN', 'CONFIRMED', 'CANCELLED', 'RETRY_WAIT'
-    )),
-    CONSTRAINT ck_mes_act_rc CHECK (receipt_outcome IS NULL OR receipt_outcome IN (
-        'NOT_SENT', 'ACCEPTED', 'REJECTED', 'UNKNOWN'
-    )),
-    CONSTRAINT uq_mes_act_cmd UNIQUE (command_id, attempt_no),
-    CONSTRAINT fk_mes_act_ord FOREIGN KEY (order_id) REFERENCES MV_NXT_DEF_HOLD_ORDER_BT (order_id)
-);
-
-CREATE INDEX idx_mes_action_order ON mes_action (order_id, action_state);
-CREATE INDEX idx_mes_action_cmd ON mes_action (command_id, attempt_no);
+-- 片／MES retry 在 wafers_json、actions_json。進站去重正式走 PARAM；SQLite 在 agent_control.inbound_json。
 
 CREATE TABLE MV_NXT_DEF_HOLD_INCIDENT_BT (
     incident_id          VARCHAR2(36)   NOT NULL,
@@ -178,22 +123,3 @@ CREATE INDEX idx_incident_mail ON MV_NXT_DEF_HOLD_INCIDENT_BT (mail_status, mail
 
 -- 不要建 agent_control。整廠開關／恢復／心跳重用現場 MV_NXT_PARAM_BT。
 -- Key：DEFAULT_HOLD_MODE 等，見 Design/ORACLE_TABLES_AND_DAO.html。adapter 依現場欄位另實作。
--- SQLite 彩排用 agent_control 模擬同一組 key。
-
-CREATE TABLE inbound_event (
-    source_event_id     VARCHAR2(128) NOT NULL,
-    lot_id              VARCHAR2(128) NOT NULL,
-    origin_operation_id VARCHAR2(128),
-    rework_count        NUMBER(10),
-    event_time          TIMESTAMP(6) WITH TIME ZONE,
-    observed_at         TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    payload             CLOB,
-    consumed            NUMBER(1)     DEFAULT 0 NOT NULL,
-    order_id            VARCHAR2(36),
-    created_at          TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-    CONSTRAINT pk_inbound_event PRIMARY KEY (source_event_id),
-    CONSTRAINT ck_inbound_cons CHECK (consumed IN (0, 1)),
-    CONSTRAINT fk_inbound_ord FOREIGN KEY (order_id) REFERENCES MV_NXT_DEF_HOLD_ORDER_BT (order_id)
-);
-
-CREATE INDEX idx_inbound_unconsumed ON inbound_event (consumed, event_time);

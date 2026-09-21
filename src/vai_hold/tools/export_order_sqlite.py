@@ -106,9 +106,10 @@ def _write_readme(db: Path, md: Path) -> None:
     conn.row_factory = sqlite3.Row
     orders = conn.execute("SELECT * FROM v_order_overview").fetchall()
     wafers = conn.execute(
-        "SELECT o.lot_id, w.wafer_id, w.ai_result "
-        "FROM order_wafer w JOIN hold_order o ON o.order_id=w.order_id "
-        "ORDER BY o.lot_id, w.wafer_id"
+        "SELECT o.lot_id, json_extract(j.value, '$.wafer_id') AS wafer_id, "
+        "json_extract(j.value, '$.ai_result') AS ai_result "
+        "FROM hold_order o, json_each(o.wafers_json) j "
+        "ORDER BY o.lot_id, wafer_id"
     ).fetchall()
     incs = conn.execute("SELECT * FROM v_open_incidents").fetchall()
     conn.close()
@@ -163,7 +164,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 {tbl(["lot_id", "work_state", "data_error", "lifecycle", "close_reason", "last_rule_id"], order_rows)}
 
-## order_wafer（含 parse 出的片號）
+## wafers_json（含 parse 出的片號）
 
 {tbl(["lot_id", "wafer_id", "slot#", "ai_result"], wafer_rows)}
 
@@ -178,7 +179,8 @@ SELECT lot_id, work_state, data_error, lifecycle, close_reason FROM v_order_over
 SELECT * FROM v_order_errors;
 SELECT * FROM v_wafer_flags;
 SELECT * FROM v_open_incidents;
-SELECT lot_id, wafer_id, ai_result, scan_completed_at FROM order_wafer ORDER BY lot_id, wafer_id;
+SELECT lot_id, json_extract(j.value,'$.wafer_id'), json_extract(j.value,'$.ai_result')
+FROM hold_order, json_each(wafers_json) j;
 ```
 """,
         encoding="utf-8",

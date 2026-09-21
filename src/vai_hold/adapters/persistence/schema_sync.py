@@ -83,7 +83,7 @@ def parse_uniques(sql: str) -> dict[str, set[tuple[str, ...]]]:
     return found
 
 
-# SQLite 彩排才有：正式 Oracle 用現場 MV_NXT_PARAM_BT，不建 agent_control。
+# SQLite 才有：正式 Oracle 重用 MV_NXT_PARAM_BT，不建 agent_control。
 SQLITE_ONLY_TABLES = frozenset({"agent_control"})
 # 正式 Oracle 表名 → SQLite 短名（比欄位時對齊）
 ORACLE_TO_SQLITE_TABLE = {
@@ -157,13 +157,12 @@ WHERE data_error IS NOT NULL
 CREATE VIEW IF NOT EXISTS v_wafer_flags AS
 SELECT
     o.lot_id,
-    w.wafer_id,
-    w.ai_result,
-    w.scan_completed_at
-FROM order_wafer w
-JOIN hold_order o ON o.order_id = w.order_id
-WHERE w.ai_result = 'DEFECT'
-ORDER BY o.lot_id, w.wafer_id;
+    json_extract(j.value, '$.wafer_id') AS wafer_id,
+    json_extract(j.value, '$.ai_result') AS ai_result,
+    json_extract(j.value, '$.scan_completed_at') AS scan_completed_at
+FROM hold_order o, json_each(o.wafers_json) j
+WHERE json_extract(j.value, '$.ai_result') = 'DEFECT'
+ORDER BY o.lot_id, wafer_id;
 
 CREATE VIEW IF NOT EXISTS v_open_incidents AS
 SELECT incident_type, status, lot_id, order_id, reason, occurrence_count, first_seen_at
