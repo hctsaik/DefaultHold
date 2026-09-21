@@ -26,6 +26,9 @@ hold:
 release:
   user: ABO
   memo: "SMM auto release Default Hold."
+  # 全部掃完後，等 Max(ScanCompletedTime)+N 分鐘再解 Default Hold。
+  # OK／NG 同一條路。N=0 ＝掃完立刻解。
+  scan_settle_minutes: 2
 
 # 選站優先序（名稱可改）；程式不得寫死 August → Overlay → CDSEM
 stations:
@@ -34,16 +37,14 @@ stations:
     - Overlay
     - CDSEM
 
-# 正式 AI 異常 Hold：查 MES 上 HoldCode+HoldUser 是否在指定站
+# 只用來判斷「進站時現場已有 SMM Hold → 不設 Default Hold」（D04）。
+# 本 Agent 不解、不改、不設 SMM Hold。解 Default Hold 不看有沒有 SMMH。
 smm_hold:
   hold_code: SMMH
   hold_user: AOA
   # DefaultHoldStep = 與 Default Hold 同一站（例：OP200 August）
   # NextProcessStep = 從目前加工站往後、且不含目前站，第一個 Process Tool
-  #   例：目前 OP100 → 不含 OP100，不是從 Default Hold（OP200）再往後找
   step: DefaultHoldStep
-  # Wafer-based Defect：Lot Hold memo 累積 slot，{slots} → 1,2
-  memo_template: "Please check {slots}"
 
 # 同一 logical action（同一 idempotency_key）含第 1 次最多送 3 次。
 # ENHL→OTHL、memo #1→#1,#2 是新動作，各自再 3 次。timeout 先查驗再重送。
@@ -54,6 +55,7 @@ action:
 smm_exception_defense:
   watchdog_minutes: 30
   # 逾時 distinct Lot 數 > 2 才停用新 Hold → 填 3
+  # 停用狀態正式寫 MV_NXT_PARAM_BT（DEFAULT_HOLD_MODE），不是 YAML。重啟不准用這份設定把 ENABLED 蓋回去。
   disable_new_hold_after_overdue_lots: 3
   notify:
     emails:

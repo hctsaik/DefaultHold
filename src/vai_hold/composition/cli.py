@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Order DB：sqlite 當 Oracle 彩排（預設）；memory 只圖快",
     )
     sub.add_parser("gen-scenario-html", help="用已存的 scenario_run 產出情境總覽 HTML（不重跑）")
-    sub.add_parser("gen-order-db", help="產出可檢查的 Order DB SQLite（C09 data_error、A123456.01 片號）")
+    sub.add_parser("gen-order-db", help="產出可檢查的 Order DB SQLite（C09 SCAN_COMPLETED、A123456.01 片號）")
     inv = sub.add_parser("investigate", help="從 log 產查案筆記（最後一輪 EVAL，不是第一筆 A2-01）")
     inv.add_argument("--lot", required=True)
     inv.add_argument("--order-id", default=None)

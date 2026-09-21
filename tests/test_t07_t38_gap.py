@@ -72,6 +72,7 @@ def test_t31_closed_with_remaining_hold():
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.check_ai()
     h.confirm_release()
     assert h.order().lifecycle == Lifecycle.CLOSED

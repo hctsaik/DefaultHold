@@ -46,6 +46,7 @@ def test_hold_query_unknown_does_not_retry_send(h):
 def test_release_transient_same_command_three_attempts_only(h):
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.world.release_response["LOT1"] = "rejected_transient"
     for _ in range(5):
         h.check_ai()
@@ -62,6 +63,7 @@ def test_release_transient_same_command_three_attempts_only(h):
 def test_release_timeout_hold_still_visible_is_delay_not_retry(h):
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.world.release_response["LOT1"] = "timeout"
     h.world.set_effect["release:LOT1"] = "none"
     h.check_ai()
@@ -72,7 +74,7 @@ def test_release_timeout_hold_still_visible_is_delay_not_retry(h):
     assert h.order().work_state == WorkState.RELEASE_VERIFY_PENDING
 
 
-def test_transfer_transient_same_command_three_attempts_only(h):
+def test_agent_never_sends_transfer_hold(h):
     _happy_until_hold(h)
     h.world.scan_wafer("LOT1", "W01", result="DEFECT")
     h.world.add_defect_hold("LOT1", memo="Please check #1")
@@ -81,11 +83,9 @@ def test_transfer_transient_same_command_three_attempts_only(h):
     h.world.transfer_response["LOT1"] = "rejected_transient"
     for _ in range(5):
         h.check_ai()
-    assert len(h.world.transfer_calls) == 3
+    assert h.world.transfer_calls == []
     tr = [c for c in h.commands() if c.action_type.value == "TRANSFER_HOLD"]
-    assert len(tr) == 1
-    nos = sorted(a.attempt_no for a in h.history() if a.command_id == tr[0].command_id)
-    assert nos == [1, 2, 3]
+    assert tr == []
     smm = [x for x in h.world.holds if x.hold_code == "SMMH"]
     assert smm and smm[0].memo == "Please check #1"
     assert h.order().lifecycle != Lifecycle.CLOSED

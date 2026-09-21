@@ -46,6 +46,7 @@ def run_t01(make_harness, happy):
     h = make_harness()
     happy(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.check_ai()
     h.confirm_release()
     return h
@@ -87,6 +88,7 @@ def run_release_retry_transient(make_harness, happy):
     h = make_harness()
     happy(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.world.release_response["LOT1"] = "rejected_transient"
     for _ in range(5):
         h.check_ai()
@@ -98,6 +100,7 @@ def run_release_retry_timeout(make_harness, happy):
     h = make_harness()
     happy(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.world.release_response["LOT1"] = "timeout"
     h.world.set_effect["release:LOT1"] = "none"
     for _ in range(4):
@@ -135,6 +138,7 @@ def run_t14_handoff(make_harness, happy):
     h = make_harness()
     happy(h)
     h.world.complete_ai("LOT1", result="DEFECT")
+    h.settle()
     h.world.add_defect_hold("LOT1")
     h.check_ai()
     h.confirm_release()
@@ -148,9 +152,9 @@ SCENARIOS: list[tuple[str, str, Callable]] = [
     ("hold_unknown_no_resend", "Hold 查詢仍 UNKNOWN：不准重送", run_hold_unknown_does_not_resend),
     ("release_retry_transient", "SET_RELEASE 暫時拒絕：同一命令最多 3 次", run_release_retry_transient),
     ("release_retry_timeout", "SET_RELEASE timeout：先查驗再重送，最多 3 次", run_release_retry_timeout),
-    ("transfer_memo_accumulate", "Wafer-based：Please check #1 → transferHold #1,#2", run_transfer_success),
-    ("transfer_retry_transient", "transferHold 暫時拒絕：同一命令最多 3 次", run_transfer_retry_transient),
-    ("t14_defect_handoff", "Defect + 正式 SmmHold → 只解 Default Hold", run_t14_handoff),
+    ("transfer_memo_accumulate", "未掃完：本 Agent 不改 SMM Memo", run_transfer_success),
+    ("transfer_retry_transient", "本 Agent 不送 transferHold", run_transfer_retry_transient),
+    ("t14_defect_handoff", "Defect + 現場 SMM Hold → 只解 Default Hold", run_t14_handoff),
 ]
 
 
@@ -257,7 +261,6 @@ def write_all() -> Path:
         extra = {
             "set_hold": len(h.world.set_hold_calls),
             "release": len(h.world.release_calls),
-            "transfer": len(h.world.transfer_calls),
             "work_state": getattr(order, "work_state", None),
             "lifecycle": getattr(order, "lifecycle", None),
         }

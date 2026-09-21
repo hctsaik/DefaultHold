@@ -9,7 +9,7 @@
 
 未跑（enabled=0）：
 
-| `T25` | 【現場不適用】Hold 查詢 UNKNOWN | 題庫關掉，不算驗收 |
+| `T25` | 現場不適用：MES 一定能回答有沒有 Hold，這題不跑 | 題庫關掉，不算驗收 |
 
 | ID | 情境 | 結果 | Order DB | HTML |
 |---|---|---|---|---|
@@ -17,7 +17,7 @@
 | `T01` | 【串接】進站到結案（對照用，驗收看 C01～C06） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T01/order.db` | `Design/generated/evidence/T01.html` |
 | `C02` | C02 查 Hold 存在（原 T01-CONFIRM） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C02/order.db` | `Design/generated/evidence/C02.html` |
 | `T02` | 【串接】ENHL 衝突後改 OTHL | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T02/order.db` | `Design/generated/evidence/T02.html` |
-| `C03` | C03 等所有 Wafer 判斷完 SMM（原 T01-WAIT） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C03/order.db` | `Design/generated/evidence/C03.html` |
+| `C03` | C03 等所有 Wafer 掃完（原 T01-WAIT） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C03/order.db` | `Design/generated/evidence/C03.html` |
 | `T03` | 所有 Hold Code 失敗 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T03/order.db` | `Design/generated/evidence/T03.html` |
 | `C04` | C04 申請解除 Default Hold（原 T01-CHECK） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C04/order.db` | `Design/generated/evidence/C04.html` |
 | `T04` | Timeout 但 MES 已有 Hold，不重送 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T04/order.db` | `Design/generated/evidence/T04.html` |
@@ -25,17 +25,17 @@
 | `T05` | Timeout 且查詢 UNKNOWN，不當失敗 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T05/order.db` | `Design/generated/evidence/T05.html` |
 | `C06` | C06 確認已解除才結案（原 T01-RELEASE） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C06/order.db` | `Design/generated/evidence/C06.html` |
 | `T06` | 送出後重啟只查驗不重送 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T06/order.db` | `Design/generated/evidence/T06.html` |
-| `C07` | C07 ENHL 衝突後改送 OTHL（原 T02） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C07/order.db` | `Design/generated/evidence/C07.html` |
+| `C07` | C07 ENHL 衝突後同一輪改送 OTHL（原 T02） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C07/order.db` | `Design/generated/evidence/C07.html` |
 | `C08` | C08 線上代解視為成功（原 T19） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C08/order.db` | `Design/generated/evidence/C08.html` |
-| `C09` | C09 有 Defect 無 SMM Hold（原 T15） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C09/order.db` | `Design/generated/evidence/C09.html` |
+| `C09` | C09 有 Defect，settle 後解（原 T15） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C09/order.db` | `Design/generated/evidence/C09.html` |
 | `T09` | 缺一片，繼續等 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T09/order.db` | `Design/generated/evidence/T09.html` |
-| `C10` | C10 有 SMM Hold 才申請解除 Default Hold（原 T14-CHECK） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C10/order.db` | `Design/generated/evidence/C10.html` |
+| `C10` | C10 Defect 掃完 + settle 申請解除（原 T14-CHECK） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C10/order.db` | `Design/generated/evidence/C10.html` |
 | `T10` | 數量對但缺＋重，繼續等 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T10/order.db` | `Design/generated/evidence/T10.html` |
-| `C11` | C11 確認已解除且 SMM Hold 仍在（原 T14-RELEASE） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C11/order.db` | `Design/generated/evidence/C11.html` |
+| `C11` | C11 確認已解除才結案（Defect 路徑，原 T14-RELEASE） | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/C11/order.db` | `Design/generated/evidence/C11.html` |
 | `T11` | 空 roster 不解 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T11/order.db` | `Design/generated/evidence/T11.html` |
-| `T12` | 有 ScanCompletedTime 無 Alarm Type → 當完成並留紀錄 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T12/order.db` | `Design/generated/evidence/T12.html` |
+| `T12` | 有 ScanCompletedTime 即當掃完 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T12/order.db` | `Design/generated/evidence/T12.html` |
 | `T13` | Rework 隔離 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T13/order.db` | `Design/generated/evidence/T13.html` |
-| `T14` | 【串接】Defect 交接走到結案 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T14/order.db` | `Design/generated/evidence/T14.html` |
+| `T14` | 【串接】Defect 掃完 + settle 走到結案 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T14/order.db` | `Design/generated/evidence/T14.html` |
 | `T16` | Release timeout 但 Hold 已消失 → CLOSED | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T16/order.db` | `Design/generated/evidence/T16.html` |
 | `T17` | Release 被拒，Hold 仍在 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T17/order.db` | `Design/generated/evidence/T17.html` |
 | `T18` | 別人的 ENHL 不是我們的 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T18/order.db` | `Design/generated/evidence/T18.html` |
@@ -60,8 +60,8 @@
 | `HOLD_UNKNOWN_NO_RESEND` | 查詢 UNKNOWN 不重送 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/HOLD_UNKNOWN_NO_RESEND/order.db` | `Design/generated/evidence/HOLD_UNKNOWN_NO_RESEND.html` |
 | `REL_RETRY3` | SET_RELEASE 暫時拒絕同一命令 3 次 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/REL_RETRY3/order.db` | `Design/generated/evidence/REL_RETRY3.html` |
 | `REL_TIMEOUT_RETRY3` | Release timeout 且 Hold 還看得到＝Delay，不重送 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/REL_TIMEOUT_RETRY3/order.db` | `Design/generated/evidence/REL_TIMEOUT_RETRY3.html` |
-| `XFER_ACCUM` | Please check #1 → transferHold #1,#2 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/XFER_ACCUM/order.db` | `Design/generated/evidence/XFER_ACCUM.html` |
-| `XFER_RETRY3` | transferHold 暫時拒絕同一命令 3 次 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/XFER_RETRY3/order.db` | `Design/generated/evidence/XFER_RETRY3.html` |
+| `XFER_ACCUM` | 未掃完不改 SMM Memo、不解 Default Hold | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/XFER_ACCUM/order.db` | `Design/generated/evidence/XFER_ACCUM.html` |
+| `XFER_RETRY3` | 本 Agent 不送 transferHold | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/XFER_RETRY3/order.db` | `Design/generated/evidence/XFER_RETRY3.html` |
 | `T18b` | 別人的 ENHL 不是我們的，自己的 ENHL 設不上就試 OTHL | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T18b/order.db` | `Design/generated/evidence/T18b.html` |
 | `T34b` | Resume 有 sponsor | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T34b/order.db` | `Design/generated/evidence/T34b.html` |
 

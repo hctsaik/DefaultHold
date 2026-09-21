@@ -8,7 +8,7 @@
 
 - set_hold calls: `1`
 - release calls: `1`
-- transfer calls: `0`
+- transfer calls: `None`
 - work_state: `CLOSED`
 - lifecycle: `CLOSED`
 
@@ -18,9 +18,9 @@
 - `hold.sent` `SET_DEFAULT_HOLD_BY_Operation_Start` rule=`A1-03` receipt=`None`
 - `hold.receipt` `SET_DEFAULT_HOLD_BY_Operation_Start` rule=`A1-03` receipt=`ACCEPTED` attempt_no=1
 - `hold.confirmed` `CONFIRM_DEFAULT_HOLD_EXISTS` rule=`A2-02` receipt=`None`
-- `release.intent` `CHECK_AI_SCAN_COMPLETE` rule=`A2-07` receipt=`None`
-- `release.sent` `CHECK_AI_SCAN_COMPLETE` rule=`A2-07` receipt=`None`
-- `release.receipt` `CHECK_AI_SCAN_COMPLETE` rule=`A2-07` receipt=`ACCEPTED` attempt_no=1
+- `release.intent` `CHECK_AI_SCAN_COMPLETE` rule=`A2-21` receipt=`None`
+- `release.sent` `CHECK_AI_SCAN_COMPLETE` rule=`A2-21` receipt=`None`
+- `release.receipt` `CHECK_AI_SCAN_COMPLETE` rule=`A2-21` receipt=`ACCEPTED` attempt_no=1
 - `release.confirmed` `CONFIRM_DEFAULT_HOLD_RELEASED` rule=`A2-11` receipt=`None`
 
 ## 每一輪 EVAL（Facts → State → Decision）
@@ -58,7 +58,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000796-EQP01",
+    "OrderId": "20260101-000000429-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "NEED_HOLD",
     "ProtectionState": "NONE",
@@ -140,7 +140,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000796-EQP01",
+    "OrderId": "20260101-000000429-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "HOLD_VERIFY_PENDING",
     "ProtectionState": "SET_PENDING",
@@ -247,7 +247,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000796-EQP01",
+    "OrderId": "20260101-000000429-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -306,7 +306,7 @@
 
 ### EVAL 4 `CHECK_AI_SCAN_COMPLETE`
 
-- **DECISION** `A2-07` / `ai_ok` action=`SET_RELEASE`
+- **DECISION** `A2-21` / `scan_completed` action=`SET_RELEASE`
 
 <details><summary>OBSERVED（原始 Facts）</summary>
 
@@ -319,7 +319,7 @@
     "ToolId": "EQP01",
     "RouteId": "RT1",
     "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:04:48Z"
+    "RecTime": "2026-01-01T00:06:48Z"
   },
   "DefaultHold": {
     "QueryStatus": "FOUND",
@@ -345,7 +345,7 @@
     "ExpectedCount": 25,
     "ScannedCount": 25,
     "LatestScanTime": "2026-01-01T00:04:48Z",
-    "RecTime": "2026-01-01T00:04:48Z"
+    "RecTime": "2026-01-01T00:06:48Z"
   },
   "Flow": {
     "MainPdId": "RT1",
@@ -353,7 +353,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000796-EQP01",
+    "OrderId": "20260101-000000429-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -412,7 +412,7 @@
 
 ### EVAL 5 `CHECK_AI_SCAN_COMPLETE`
 
-- **DECISION** `A2-07` / `ai_ok` action=`SET_RELEASE`
+- **DECISION** `A2-21` / `scan_completed` action=`SET_RELEASE`
 
 <details><summary>OBSERVED（原始 Facts）</summary>
 
@@ -425,7 +425,7 @@
     "ToolId": "EQP01",
     "RouteId": "RT1",
     "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:04:48Z"
+    "RecTime": "2026-01-01T00:06:48Z"
   },
   "DefaultHold": {
     "QueryStatus": "NOT_FOUND",
@@ -442,7 +442,7 @@
     "ExpectedCount": 25,
     "ScannedCount": 25,
     "LatestScanTime": "2026-01-01T00:04:48Z",
-    "RecTime": "2026-01-01T00:04:48Z"
+    "RecTime": "2026-01-01T00:06:48Z"
   },
   "Flow": {
     "MainPdId": "RT1",
@@ -450,14 +450,14 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000796-EQP01",
+    "OrderId": "20260101-000000429-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "RELEASE_SENT",
     "ProtectionState": "RELEASE_PENDING",
     "AiState": "COMPLETE_OK",
-    "LastRuleId": "A2-07",
+    "LastRuleId": "A2-21",
     "StateReason": null,
-    "CloseReason": null,
+    "CloseReason": "SCAN_COMPLETED",
     "DataError": null,
     "TargetOpeNo": "OP200",
     "OperationStartAt": "2026-01-01T00:00:00Z",
@@ -526,7 +526,7 @@
     "ToolId": "EQP01",
     "RouteId": "RT1",
     "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:04:48Z"
+    "RecTime": "2026-01-01T00:06:48Z"
   },
   "DefaultHold": {
     "QueryStatus": "NOT_FOUND",
@@ -543,7 +543,7 @@
     "ExpectedCount": 25,
     "ScannedCount": 25,
     "LatestScanTime": "2026-01-01T00:04:48Z",
-    "RecTime": "2026-01-01T00:04:48Z"
+    "RecTime": "2026-01-01T00:06:48Z"
   },
   "Flow": {
     "MainPdId": "RT1",
@@ -551,14 +551,14 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000796-EQP01",
+    "OrderId": "20260101-000000429-EQP01",
     "Lifecycle": "CLOSED",
     "WorkState": "CLOSED",
     "ProtectionState": "RELEASED",
     "AiState": "COMPLETE_OK",
     "LastRuleId": "A2-11",
     "StateReason": null,
-    "CloseReason": "AI_OK",
+    "CloseReason": "SCAN_COMPLETED",
     "DataError": null,
     "TargetOpeNo": "OP200",
     "OperationStartAt": "2026-01-01T00:00:00Z",

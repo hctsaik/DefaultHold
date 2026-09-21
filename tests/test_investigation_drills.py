@@ -59,6 +59,7 @@ def test_drill_t01(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.check_ai()
     h.confirm_release()
     assert h.order().lifecycle == Lifecycle.CLOSED
@@ -110,6 +111,7 @@ def test_drill_t12(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1", missing_result="W03")
+    h.settle()
     h.check_ai()
     _assert_traceable(caplog, "T12")
 
@@ -129,6 +131,7 @@ def test_drill_t17(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.world.release_response["LOT1"] = "rejected_permission"
     h.check_ai()
     h.confirm_release()
@@ -285,6 +288,7 @@ def test_drill_t14(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1", result="DEFECT")
+    h.settle()
     h.world.add_defect_hold("LOT1")
     h.check_ai()
     h.confirm_release()
@@ -296,6 +300,7 @@ def test_drill_t16(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.world.release_response["LOT1"] = "timeout"
     h.check_ai()
     h.confirm_release()
@@ -340,6 +345,7 @@ def test_drill_t31(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.check_ai()
     h.confirm_release()
     h.world.holds.append(

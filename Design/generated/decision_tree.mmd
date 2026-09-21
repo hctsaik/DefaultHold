@@ -18,30 +18,26 @@ flowchart TB
   A2_10_release_sent -->|否| A2_10_release_verifying
   A2_10_release_in_flight["A2-10 解除命令未查驗完"]
   A2_10_release_verifying -->|否| A2_10_release_in_flight
-  A2_16_transfer_in_flight["A2-16 SmmHold memo transfer 未查驗完"]
-  A2_10_release_in_flight -->|否| A2_16_transfer_in_flight
   A2_14_hold_query_unknown["A2-14 Hold 查詢 UNKNOWN/STALE"]
-  A2_16_transfer_in_flight -->|否| A2_14_hold_query_unknown
+  A2_10_release_in_flight -->|否| A2_14_hold_query_unknown
   A1_09_retry_same_action["A1-09 同一命令重試（最多 3 次）"]
   A2_14_hold_query_unknown -->|否| A1_09_retry_same_action
   A2_11_release_verified["A2-11 解除已在 MES 證實"]
   A1_09_retry_same_action -->|否| A2_11_release_verified
   A2_12_release_rejected_hold_remains["A2-12 解除失敗且 Hold 仍在"]
   A2_11_release_verified -->|否| A2_12_release_rejected_hold_remains
-  A2_16_smm_memo_transfer["A2-16 Defect 片增加 → transferHold 累積 memo"]
-  A2_12_release_rejected_hold_remains -->|否| A2_16_smm_memo_transfer
+  A2_20_skip_default_hold_smm_present["A2-20 現場已有 SMM Hold，不設 Default Hold"]
+  A2_12_release_rejected_hold_remains -->|否| A2_20_skip_default_hold_smm_present
   A2_05_ai_incomplete["A2-05 有防守但 AI 未齊"]
-  A2_16_smm_memo_transfer -->|否| A2_05_ai_incomplete
+  A2_20_skip_default_hold_smm_present -->|否| A2_05_ai_incomplete
   A2_06_ai_result_invalid["A2-06 AI 結果無效"]
   A2_05_ai_incomplete -->|否| A2_06_ai_result_invalid
-  A2_07_ai_ok["A2-07 整批 OK → 申請解除"]
-  A2_06_ai_result_invalid -->|否| A2_07_ai_ok
-  A2_08_defect_hold_handoff["A2-08 有 Defect 且 SMM Hold 已接手"]
-  A2_07_ai_ok -->|否| A2_08_defect_hold_handoff
-  A2_09_defect_without_formal_hold["A2-09 有 Defect 但 SMM Hold 未確認"]
-  A2_08_defect_hold_handoff -->|否| A2_09_defect_without_formal_hold
+  A2_09_scan_dwell["A2-09 已掃完，等 settle 分鐘"]
+  A2_06_ai_result_invalid -->|否| A2_09_scan_dwell
+  A2_21_scan_completed["A2-21 已掃完且滿 settle，申請解除"]
+  A2_09_scan_dwell -->|否| A2_21_scan_completed
   A2_04_line_released_after_confirmed["A2-04 曾確認的 Hold 被線上解掉，視為解除成功"]
-  A2_09_defect_without_formal_hold -->|否| A2_04_line_released_after_confirmed
+  A2_21_scan_completed -->|否| A2_04_line_released_after_confirmed
   A2_18_retry_exhausted["A2-18 同一命令已送滿 3 次"]
   A2_04_line_released_after_confirmed -->|否| A2_18_retry_exhausted
   A1_04_backup_hold_code["A1-04 換備援 Hold Code"]

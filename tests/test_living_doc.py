@@ -38,6 +38,7 @@ def test_t01_render_case_has_path_and_locator(caplog):
     h = make_harness()
     _happy_until_hold(h)
     h.world.complete_ai("LOT1")
+    h.settle()
     h.check_ai()
     h.confirm_release()
     recs = parse_records(caplog.text)

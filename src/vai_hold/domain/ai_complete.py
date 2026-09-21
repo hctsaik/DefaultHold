@@ -82,8 +82,10 @@ def scan_settle_ready(
     *,
     rework_count: int,
     now: datetime,
+    settle: timedelta | None = None,
 ) -> bool:
     mx = max_scan_completed_at(expected_ids, views, rework_count=rework_count)
     if mx is None:
         return False
-    return _aware(now) >= mx + SCAN_SETTLE
+    wait = SCAN_SETTLE if settle is None else settle
+    return _aware(now) >= mx + wait

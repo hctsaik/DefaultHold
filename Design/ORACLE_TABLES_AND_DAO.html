@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>接 Oracle：要建哪些表、要實作哪些 DAO</title>
+  <style>
+    body { font-family: "Segoe UI","Noto Sans TC",sans-serif; margin:0; background:#f4f1ea; color:#1c1917; }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.45rem; margin-bottom: 8px; }
+    h2 { font-size: 1.08rem; color: #0f766e; }
+    h3 { font-size: 0.98rem; margin: 18px 0 8px; }
+    .muted { color:#57534e; }
+    .card { background:#fff; border-radius:12px; padding:18px 20px; margin:16px 0; border:1px solid #e7e5e4; }
+    table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+    td, th { border-bottom:1px solid #e7e5e4; padding:7px 6px; text-align:left; vertical-align:top; }
+    th { color:#57534e; font-weight:600; }
+    code, pre { font-family: ui-monospace, Consolas, monospace; }
+    pre { background:#1c1917; color:#fafaf9; padding:12px; border-radius:10px; overflow:auto; font-size:0.78rem; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.82rem; margin-right:6px; }
+    .ok { background:#d1fae5; color:#065f46; }
+    .todo { background:#ffedd5; color:#9a3412; }
+    .skip { background:#e7e5e4; color:#44403c; }
+    .num { font-size:2rem; font-weight:700; color:#0f766e; line-height:1; }
+    .stats { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
+    .stat { background:#fff; border:1px solid #e7e5e4; border-radius:12px; padding:14px; }
+    .stat p { margin:6px 0 0; font-size:0.86rem; color:#57534e; }
+    a { color:#0f766e; }
+    details { margin:8px 0; }
+    summary { cursor:pointer; color:#0f766e; font-weight:600; }
+    .warn { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:10px 12px; }
+    .sql { background:#ecfdf5; border-radius:8px; padding:10px 12px; }
+    ul.tight li { margin:4px 0; }
+  </style>
+</head>
+<body>
+<header>
+  <p class="muted"><a href="scenarios.html">← 情境庫</a> · 對齊 <code>Design/schema/oracle.sql</code> 與 <code>PERSISTENCE_DAO.md</code></p>
+  <h1>接 Oracle：要建哪些表、要實作哪些 DAO</h1>
+  <p class="story">這份是<strong>本系統自己的 Order DB</strong>，不是 MES。Memory／SQLite 用短表名彩排；正式 Oracle 用現場表名。整廠開關<strong>不新建表</strong>，重用 <code>MV_NXT_PARAM_BT</code>（adapter 之後依現場欄位另實作）。</p>
+</header>
+<main>
+
+  <div class="stats">
+    <div class="stat"><div class="num">2</div><p>Oracle 新建（ORDER + INCIDENT）</p></div>
+    <div class="stat"><div class="num">1</div><p>重用 PARAM key-value</p></div>
+    <div class="stat"><div class="num">6</div><p>SQLite 彩排張數（含 wafer／action）</p></div>
+    <div class="stat"><div class="num">1</div><p>Oracle adapter 尚未寫</p></div>
+  </div>
+
+  <div class="card">
+    <h2>正式 Oracle 表名</h2>
+    <table>
+      <thead><tr><th>SQLite 彩排</th><th>正式 Oracle</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>hold_order</code></td>
+          <td><code>MV_NXT_DEF_HOLD_ORDER_BT</code></td>
+          <td>新建。一張單：狀態機、目前 Default Hold。SQLite 另有 wafer／action 表；進 Oracle 時可併進這張大欄。</td>
+        </tr>
+        <tr>
+          <td><code>incident</code></td>
+          <td><code>MV_NXT_DEF_HOLD_INCIDENT_BT</code></td>
+          <td>新建。告警＋寄信。值班 SQL：<code>SELECT * FROM MV_NXT_DEF_HOLD_INCIDENT_BT WHERE lot_id=… AND status='OPEN'</code></td>
+        </tr>
+        <tr>
+          <td><code>agent_control</code></td>
+          <td><code>MV_NXT_PARAM_BT</code></td>
+          <td><strong>不新建。</strong>重用現場 key-value。欄位對法之後依現場 DDL 另實作。SQLite 用一列模擬同一組 key。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>結論：真正必要的是 6 張</h2>
+    <p>業務就一件事：<strong>進站 → 設 Default Hold → 等全部掃完 + settle → 解 Hold → 結案</strong>，加上失敗告警、重試 3 次、整廠停用新 Hold。</p>
+    <p>現況 12 張是照完整規格攤開的，不是現場最小集。下面 6 張砍不掉；其餘該刪或併。</p>
+    <table>
+      <thead><tr><th>#</th><th>表</th><th>為什麼必要</th><th>現況從哪裡來</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><code>hold_order</code> → Oracle <code>MV_NXT_DEF_HOLD_ORDER_BT</code></td>
+          <td>一張單的狀態機（WAIT_AI／RELEASE_SENT／CLOSED）＋<strong>目前這一筆</strong> Default Hold（Code、Memo、確認／解除時間）。沒有這張就沒有系統。</td>
+          <td>hold_order ＋ 目前那筆 hold_binding</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><code>order_wafer</code></td>
+          <td>解 Hold 只看「片有沒有 ScanCompletedTime」。Max(掃完時間)+settle 分鐘必須按片存。塞進 JSON 以後沒辦法用 SQL 查。</td>
+          <td>原表保留，欄位可再瘦（不必管 missing_alarm_type）</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><code>mes_action</code></td>
+          <td>送 MES 前先落庫：凍結 payload、idempotency、第幾次 attempt、回執。沒有這張，Timeout 無法「先查再重送、最多 3 次」。</td>
+          <td>action_command ＋ action_history 併成一張（一 attempt 一列）</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><code>incident</code> → Oracle <code>MV_NXT_DEF_HOLD_INCIDENT_BT</code></td>
+          <td>HOLD_FAILED／HOLD_OVERDUE 等。你那句 <code>WHERE lot_id=… AND status='OPEN'</code> 查這張。寄信狀態可放同一列（現場一告警一封信）。</td>
+          <td>incident ＋ alarm_outbox</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><code>MV_NXT_PARAM_BT</code>（既有，不新建）</td>
+          <td>整廠開關／恢復／心跳。正式環境<strong>不建</strong> <code>agent_control</code>，改寫現場這張 PARAM key-value。</td>
+          <td>SQLite 彩排仍用 <code>agent_control</code> 模擬同一組 key</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><code>inbound_event</code></td>
+          <td>進站事件去重。同一 <code>source_event_id</code> 重送不能再建一張單、也不能把 roster 變更告警開兩次。</td>
+          <td>原表保留，欄位可瘦</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted"><code>schema_migration</code> 若 DBA 用自己的上版工具，可以不建。查案 View 全部可選，不進生產契約。</p>
+  </div>
+
+  <div class="card spec">
+    <h2>MV_NXT_PARAM_BT：正式環境的整廠開關（不新建 agent_control）</h2>
+    <p>現場已有 PARAM 表做 key-value 控制。Oracle adapter 的 <code>SystemControlDao</code> 讀寫這張表，<strong>不要 CREATE agent_control</strong>。欄位對法之後依現場 DDL 另實作。SQLite 彩排仍用 <code>agent_control</code> 一列，語意相同。</p>
+    <p>PARAM key 一律 <code>DEFAULT_HOLD_*</code>（不是 <code>VAI_HOLD.*</code>）。實際欄名（例如 PARAM_NAME／PARAM_VALUE）以現場 DDL 為準。</p>
+    <table>
+      <thead><tr><th>PARAM key</th><th>值</th><th>對應 SQLite agent_control 欄</th><th>誰寫</th></tr></thead>
+      <tbody>
+        <tr><td><code>DEFAULT_HOLD_MODE</code></td><td><code>ENABLED</code>／<code>DISABLED_NEW_HOLD</code>／<code>RECOVERY_PENDING</code></td><td><code>mode</code></td><td>Watchdog 停用；Resume 恢復</td></tr>
+        <tr><td><code>DEFAULT_HOLD_DISABLE_REASON</code></td><td>例如 <code>overdue_lots=3</code></td><td><code>disable_reason</code></td><td>Watchdog</td></tr>
+        <tr><td><code>DEFAULT_HOLD_DISABLE_TRIGGER</code></td><td><code>WATCHDOG</code></td><td><code>disable_trigger</code></td><td>Watchdog</td></tr>
+        <tr><td><code>DEFAULT_HOLD_DISABLED_AT</code></td><td>UTC ISO 時間</td><td><code>disabled_at</code></td><td>Watchdog</td></tr>
+        <tr><td><code>DEFAULT_HOLD_SPONSOR_ID</code></td><td>批准人</td><td><code>sponsor_id</code></td><td>Resume</td></tr>
+        <tr><td><code>DEFAULT_HOLD_SPONSOR_APPROVED_AT</code></td><td>UTC ISO 時間</td><td><code>sponsor_approved_at</code></td><td>Resume</td></tr>
+        <tr><td><code>DEFAULT_HOLD_RESUME_EVIDENCE</code></td><td>恢復證據</td><td>（Resume 參數）</td><td>Resume</td></tr>
+        <tr><td><code>DEFAULT_HOLD_CONTROL_VERSION</code></td><td>整數，樂觀鎖</td><td><code>control_version</code></td><td>每次改 MODE 加一</td></tr>
+        <tr><td><code>DEFAULT_HOLD_LAST_HEARTBEAT_AT</code></td><td>UTC ISO 時間</td><td><code>last_heartbeat_at</code></td><td>每輪 Cron（可選）</td></tr>
+      </tbody>
+    </table>
+    <p class="warn">這不是 YAML：Watchdog 會把 <code>DEFAULT_HOLD_MODE</code> 寫成停用，重啟必須讀 PARAM 而不是設定檔預設 ENABLED。心跳若廠內已有 process Alarm，可以不寫 <code>DEFAULT_HOLD_LAST_HEARTBEAT_AT</code>，以免每分鐘打共享 PARAM 表。</p>
+  </div>
+
+  <div class="card">
+    <h2>6 張都必要嗎？還能再少嗎？</h2>
+    <p><strong>真正砍不掉的狀態只有三塊：</strong>訂單、<code>incident</code>、整廠開關。開關在正式環境<strong>不新建表</strong>，用 <code>MV_NXT_PARAM_BT</code>。</p>
+    <table>
+      <thead><tr><th>表</th><th>能不能拿掉</th><th>拿掉之後怎麼活</th><th>你會失去什麼</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>hold_order</code></td>
+          <td><span class="badge ok">不能</span></td>
+          <td>—</td>
+          <td>沒有訂單就沒有這套系統</td>
+        </tr>
+        <tr>
+          <td><code>incident</code></td>
+          <td><span class="badge ok">不能</span></td>
+          <td>—</td>
+          <td>告警可以沒有訂單（進站資料不齊、心跳死掉）。塞進 hold_order 會漏掉這些。你那句 SQL 也是查這張</td>
+        </tr>
+        <tr>
+          <td>整廠開關</td>
+          <td><span class="badge ok">不能不記；正式不新建表</span></td>
+          <td>Oracle 用既有 <code>MV_NXT_PARAM_BT</code>（key-value）。SQLite 才用 <code>agent_control</code> 彩排</td>
+          <td>重啟後忘了「已停用」，會繼續對新 Lot 設 Hold</td>
+        </tr>
+        <tr>
+          <td><code>order_wafer</code></td>
+          <td><span class="badge todo">能併</span></td>
+          <td>片清單＋ScanCompletedTime 做成 hold_order 上一欄 CLOB／JSON，解 Hold 仍在程式裡算 Max+settle</td>
+          <td>不能再 <code>SELECT wafer_id FROM order_wafer WHERE lot=…</code>。查案要拆 JSON</td>
+        </tr>
+        <tr>
+          <td><code>mes_action</code></td>
+          <td><span class="badge todo">能併</span></td>
+          <td>目前這筆命令＋最多 3 次 attempt 很小，可做成 hold_order 上的 payload + attempt CLOB</td>
+          <td>不能用 SQL 列出「這張單送了幾次 MES」。retry 邏輯仍在程式裡</td>
+        </tr>
+        <tr>
+          <td><code>inbound_event</code></td>
+          <td><span class="badge todo">最能砍</span></td>
+          <td>訂單鍵 <code>(lot, 站, rework)</code> 已經 UNIQUE，重送同一 Lot 不會再建單。若進站是<strong>輪詢現況</strong>不是「同一事件重送」，這張可以不要</td>
+          <td>若上游會用同一個 event_id 重送、或同一 Lot 連發兩筆（換 roster），可能重複開 MANUAL_REVIEW</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>建議檔次：</p>
+    <ul>
+      <li><strong>6 張（現在）：</strong>查案全部用 SQL，DBA 也好對。這是「獨立表」的下限，不是「資料」的下限。</li>
+      <li><strong>4 張：</strong>砍 <code>inbound_event</code>＋把 <code>mes_action</code> 併進 hold_order。還留 order_wafer，因為解 Hold 與查片是日常。</li>
+      <li><strong>正式 Oracle：</strong>新建 <code>MV_NXT_DEF_HOLD_ORDER_BT</code>＋<code>MV_NXT_DEF_HOLD_INCIDENT_BT</code>；開關重用 <code>MV_NXT_PARAM_BT</code>。</li>
+    </ul>
+    <p class="warn">不建議為了少兩張表，把片清單塞 JSON——解 Hold 的唯一條件就是「每片 ScanCompletedTime」。獨立 <code>order_wafer</code> 對現場查案最有用。若還要再砍，優先砍 <code>inbound_event</code>（看進站介面是不是事件重送）。</p>
+  </div>
+
+  <div class="card">
+    <h2>12 → 6：每張怎麼處理</h2>
+    <table>
+      <thead><tr><th>現況表</th><th>建議</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><code>hold_order</code></td><td><span class="badge ok">留</span></td><td>核心</td></tr>
+        <tr><td><code>order_wafer</code></td><td><span class="badge ok">留</span></td><td>掃完時間按片</td></tr>
+        <tr><td><code>hold_binding</code></td><td><span class="badge todo">併進 hold_order</span></td><td>本 Agent 只認一筆 Default Hold。ENHL 失敗改 OTHL 是「目前 Code」更新；舊碼留在 mes_action 即可。不再為 SMM Hold 建第二種 binding。</td></tr>
+        <tr><td><code>action_command</code></td><td><span class="badge todo">併成 mes_action</span></td><td>一張單同時最多一個 in-flight 寫 MES，摘要不必另表</td></tr>
+        <tr><td><code>action_history</code></td><td><span class="badge todo">併成 mes_action</span></td><td>本來就是「每次 attempt 一列」；兩張是同一件事拆開</td></tr>
+        <tr><td><code>incident</code></td><td><span class="badge ok">留</span></td><td>告警主檔</td></tr>
+        <tr><td><code>alarm_outbox</code></td><td><span class="badge todo">併進 incident</span></td><td>現在一開告警就排一封信，1:1。加 <code>mail_status</code>／<code>mail_next_retry_at</code> 就夠</td></tr>
+        <tr><td><code>system_control</code>／<code>agent_control</code></td><td><span class="badge skip">Oracle 不建</span></td><td>正式用既有 <code>MV_NXT_PARAM_BT</code>；SQLite 才留 agent_control 彩排</td></tr>
+        <tr><td><code>discovery_cursor</code></td><td><span class="badge skip">刪／併</span></td><td>實際只用來記 heartbeat，不是進站游標。心跳放 agent_control.last_heartbeat_at</td></tr>
+        <tr><td><code>observation_snapshot</code></td><td><span class="badge skip">刪</span></td><td><strong>應用程式從來沒寫入。</strong>決策證據在 log 的 eval.cycle，不是這張表</td></tr>
+        <tr><td><code>inbound_event</code></td><td><span class="badge ok">留</span></td><td>進站去重</td></tr>
+        <tr><td><code>schema_migration</code></td><td><span class="badge skip">可選</span></td><td>給 adapter 自己用；DBA 有上版流程就可不要</td></tr>
+      </tbody>
+    </table>
+    <p class="warn">DDL 與 SQLite 彩排<strong>已收到這 6 張</strong>（<code>Design/schema/sqlite.sql</code>、<code>oracle.sql</code>）。Memory 單測仍用記憶體物件，不建多餘的表。</p>
+  </div>
+
+  <div class="card sql">
+    <h2>你那句 SQL 對哪一張表</h2>
+<pre>SELECT * FROM MV_NXT_DEF_HOLD_INCIDENT_BT
+ WHERE lot_id = 'LOT1'
+   AND status = 'OPEN';</pre>
+    <p>SQLite 彩排表名是 <code>incident</code>。這是告警主檔：某 Lot 還開著的異常（HOLD_FAILED、HOLD_OVERDUE、AI_RESULT_INVALID…）。<code>status</code> 只准 <code>OPEN</code>／<code>ACKED</code>／<code>RESOLVED</code>。</p>
+    <p>現有索引是 <code>(status, last_seen_at)</code>，適合「全部未結案」。常按 Lot 查用 <code>(lot_id, status)</code>。</p>
+  </div>
+
+  <div class="card">
+    <h2>現況 12 張（程式還在用，不是建議再建）</h2>
+    <table>
+      <thead><tr><th>#</th><th>表</th><th>用途</th><th>誰在寫</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><code>schema_migration</code></td><td>DDL 版本。adapter 內部，業務程式不要碰。</td><td>啟動／遷移</td></tr>
+        <tr><td>2</td><td><code>hold_order</code></td><td>一張單：這個 Lot、這站、這輪 Rework 的狀態投影（WAIT_AI、RELEASE_SENT、CLOSED…）。</td><td>建單／每輪 Cron</td></tr>
+        <tr><td>3</td><td><code>order_wafer</code></td><td>這張單預期有哪些片、掃完時間、OK／DEFECT、缺 Alarm Type。</td><td>進站 roster、CHECK 掃片</td></tr>
+        <tr><td>4</td><td><code>hold_binding</code></td><td>本系統 Default Hold 綁在 MES 的六欄（Lot／Route／Ope／Code／User／Memo）＋時間。不是 MES 本體。</td><td>SET／CONFIRM／RELEASE</td></tr>
+        <tr><td>5</td><td><code>action_command</code></td><td>目前這張單的邏輯命令（SET_HOLD／SET_RELEASE）與凍結 payload、idempotency。</td><td>送 MES 前</td></tr>
+        <tr><td>6</td><td><code>action_history</code></td><td>每次 attempt 只追加。同一命令最多 3 次。不准改歷史列。</td><td>每次送／回執</td></tr>
+        <tr><td>7</td><td><code>incident</code></td><td>告警 episode。可以還沒有訂單（進站資料不齊）。你那句 SQL 查這張。</td><td>失敗／超時／資料異常</td></tr>
+        <tr><td>8</td><td><code>alarm_outbox</code></td><td>跟 incident 同一交易寫入的待寄信。寄成功才標 SENT。</td><td>開告警時</td></tr>
+        <tr><td>9</td><td><code>system_control</code></td><td>整廠開關：ENABLED／停用新 Hold。重啟必須還記得已停用。</td><td>Watchdog／Resume</td></tr>
+        <tr><td>10</td><td><code>observation_snapshot</code></td><td>決策當下看到的 MES／AI 摘要（FOUND／NOT_FOUND／UNKNOWN）。</td><td>snapshot</td></tr>
+        <tr><td>11</td><td><code>discovery_cursor</code></td><td>進站事件游標，避免重播整段歷史。</td><td>SET 管線</td></tr>
+        <tr><td>12</td><td><code>inbound_event</code></td><td>進站事件去重（source_event_id UNIQUE）。</td><td>收到 Operation Start</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">表名避開 Oracle 保留字，所以不用 <code>ORDER</code>，用 <code>hold_order</code>。</p>
+  </div>
+
+  <div class="card">
+    <h2>表與表怎麼連</h2>
+<pre>hold_order 1 ──&lt; order_wafer
+           1 ──&lt; hold_binding     （order_id 可空：orphan Hold）
+           1 ──&lt; action_command 1 ──&lt; action_history
+           1 ──&lt; observation_snapshot
+           1 ──&lt; incident 1 ──&lt; alarm_outbox
+           1 ──&lt; inbound_event     （消費後才填 order_id）
+system_control     （獨立一列 DEFAULT）
+discovery_cursor   （獨立，按 cursor_name）
+schema_migration   （獨立）</pre>
+  </div>
+
+  <div class="card">
+    <h2>欄位（Oracle 型別）</h2>
+    <p class="muted">SQLite 同名欄位；差在 TEXT↔VARCHAR2／CLOB、INTEGER↔NUMBER、時間存 ISO 字串↔TIMESTAMP WITH TIME ZONE。加欄必須兩份 DDL 一起改。</p>
+
+    <h3>incident — 你的查詢</h3>
+    <table>
+      <thead><tr><th>欄位</th><th>型別</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>incident_id</code></td><td>VARCHAR2(36) PK</td><td>應用層 UUID</td></tr>
+        <tr><td><code>subject_kind</code></td><td>ORDER／DISCOVERY／SYSTEM</td><td>有單／進站就壞／整廠</td></tr>
+        <tr><td><code>subject_key</code></td><td>VARCHAR2(128)</td><td>去重：通常 order_id 或 source_event_id</td></tr>
+        <tr><td><code>order_id</code></td><td>FK 可空</td><td>還沒建單也可以有告警</td></tr>
+        <tr><td><code>lot_id</code></td><td>VARCHAR2(128) 可空</td><td>你的 WHERE 用這個</td></tr>
+        <tr><td><code>origin_operation_id</code></td><td>VARCHAR2(128)</td><td>觸發站</td></tr>
+        <tr><td><code>rework_count</code></td><td>NUMBER(10)</td><td>輪次；未知不准假裝 0 去建單</td></tr>
+        <tr><td><code>incident_type</code></td><td>VARCHAR2(64)</td><td>HOLD_FAILED、HOLD_OVERDUE…</td></tr>
+        <tr><td><code>episode_id</code></td><td>VARCHAR2(64)</td><td>同一 episode 只開一張；UNIQUE(subject_key, type, episode)</td></tr>
+        <tr><td><code>severity</code></td><td>INFO／WARN／ERROR／CRITICAL</td><td></td></tr>
+        <tr><td><code>status</code></td><td>OPEN／ACKED／RESOLVED</td><td>你的 WHERE 用這個</td></tr>
+        <tr><td><code>reason</code>／<code>error_detail</code></td><td>VARCHAR2／CLOB</td><td>給人看的原因；Watchdog 會標 ESTIMATED</td></tr>
+        <tr><td><code>occurrence_count</code></td><td>NUMBER</td><td>同一 episode 再碰到就 +1，不另開一張</td></tr>
+        <tr><td><code>first_seen_at</code>／<code>last_seen_at</code></td><td>TSTZ</td><td></td></tr>
+        <tr><td><code>acked_*</code>／<code>resolved_*</code></td><td>時間＋人</td><td>ACK 與結案分開</td></tr>
+      </tbody>
+    </table>
+
+    <details>
+      <summary>hold_order（訂單主檔，欄最多）</summary>
+      <table>
+        <thead><tr><th>群</th><th>欄位</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>身分</td><td><code>order_id</code></td><td>PK，應用層 UUID</td></tr>
+          <tr><td></td><td><code>lot_id</code> + <code>origin_operation_id</code> + <code>rework_count</code></td><td>UNIQUE 訂單鍵。origin 寫入後不准改</td></tr>
+          <tr><td></td><td><code>site_id</code></td><td>預留；目前 UNIQUE 不含 site</td></tr>
+          <tr><td>選站</td><td><code>target_hold_operation_id</code>、<code>hold_route_id</code>、<code>future_hold_ope_name</code>、<code>tool_id</code></td><td>Default Hold 要設在哪</td></tr>
+          <tr><td>狀態</td><td><code>lifecycle</code></td><td>OPEN／CLOSED／MANUAL_CLOSED</td></tr>
+          <tr><td></td><td><code>work_state</code></td><td>WAIT_AI、RELEASE_SENT、HOLD_FAILED…</td></tr>
+          <tr><td></td><td><code>protection_state</code>、<code>ai_state</code></td><td>Hold 防守／掃片結果</td></tr>
+          <tr><td></td><td><code>last_rule_id</code>、<code>state_reason</code>、<code>close_reason</code></td><td>A2-21、SCAN_COMPLETED…</td></tr>
+          <tr><td></td><td><code>data_error</code></td><td>事後可查的資料錯；解 Hold 不再寫 NO_SMM_HOLD</td></tr>
+          <tr><td>鎖</td><td><code>row_version</code></td><td>樂觀鎖；update／claim 必須對得上</td></tr>
+          <tr><td></td><td><code>claim_owner</code>、<code>claim_until</code></td><td>多台 Cron 搶同一張單</td></tr>
+          <tr><td>時間</td><td><code>operation_start_at</code></td><td>進站 Operation Start（真實事件時間）</td></tr>
+          <tr><td></td><td><code>created_at</code>／<code>updated_at</code>／<code>last_evaluated_at</code>／<code>next_check_at</code></td><td>本機 Clock；Watchdog 標估計</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>order_wafer</summary>
+      <table>
+        <thead><tr><th>欄位</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>PK <code>(order_id, wafer_id)</code></td><td>現場格式例如 A123456.01</td></tr>
+          <tr><td><code>roster_version</code></td><td>名單版本；換名單整批替換，不靜默縮小</td></tr>
+          <tr><td><code>scan_completed_at</code></td><td>解 Hold 用 Max(這欄)+settle 分鐘</td></tr>
+          <tr><td><code>ai_result</code></td><td>OK／DEFECT／INVALID；路徑已不分 OK／NG</td></tr>
+          <tr><td><code>missing_alarm_type</code></td><td>有掃完時間、沒 Alarm Type → 仍當掃完，這裡留 1</td></tr>
+          <tr><td><code>defect_types</code>、<code>required_tasks</code></td><td>CLOB／TEXT，不在 DB 內當 JSON 契約查</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>hold_binding</summary>
+      <table>
+        <thead><tr><th>欄位</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>lot_id, route_id, ope_no, hold_code, hold_user, hold_memo</code></td><td>認「這筆是我們的 Default Hold」。沒有 MES Record ID 當身分</td></tr>
+          <tr><td><code>role</code></td><td>PREVENTIVE＝本系統 Default Hold</td></tr>
+          <tr><td><code>status</code></td><td>PENDING→CONFIRMED→RELEASE_PENDING→RELEASED</td></tr>
+          <tr><td><code>time_quality</code></td><td>ESTIMATED 直到 MES 真有 Created</td></tr>
+          <tr><td><code>mes_hold_record_id</code>／<code>hold_token</code></td><td>有才存；UNIQUE 允許多個 NULL。沒 FETCH 到不准編造</td></tr>
+          <tr><td>時間欄</td><td>requested／first_confirmed／release_*</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>action_command + action_history</summary>
+      <table>
+        <thead><tr><th>欄位</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>idempotency_key</code> UNIQUE</td><td>MES 同一 key 只當真一次</td></tr>
+          <tr><td><code>logical_action_key</code> UNIQUE</td><td>同一邏輯動作；換 Code 是新動作</td></tr>
+          <tr><td><code>payload_json</code> CLOB</td><td>送出後凍結，retry 不准改包</td></tr>
+          <tr><td><code>action_type</code></td><td>實際在用 SET_HOLD／SET_RELEASE；DDL 仍列 TRANSFER_HOLD（已不送）</td></tr>
+          <tr><td>history <code>attempt_no</code></td><td>含第 1 次最多 3；只 INSERT</td></tr>
+          <tr><td><code>receipt_outcome</code></td><td>ACCEPTED／REJECTED／UNKNOWN</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>其餘 6 張（較短）</summary>
+      <table>
+        <thead><tr><th>表</th><th>重點欄</th></tr></thead>
+        <tbody>
+          <tr><td><code>alarm_outbox</code></td><td>incident_id、channel、payload、delivery_status（PENDING→SENT／FAILED／ACKED）、next_retry_at</td></tr>
+          <tr><td><code>system_control</code></td><td>scope=DEFAULT、mode、control_version、sponsor_*。重啟不得被 yaml 預設 ENABLED 蓋掉</td></tr>
+          <tr><td><code>observation_snapshot</code></td><td>source_name、outcome=FOUND／NOT_FOUND／UNKNOWN／STALE、payload CLOB</td></tr>
+          <tr><td><code>discovery_cursor</code></td><td>cursor_name、last_event_id、last_event_time</td></tr>
+          <tr><td><code>inbound_event</code></td><td>source_event_id PK、lot_id、event_time、consumed 0/1、order_id</td></tr>
+          <tr><td><code>schema_migration</code></td><td>version、name、applied_at。現在只有 version=1 init</td></tr>
+        </tbody>
+      </table>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>可選：4 個查案 View</h2>
+    <p>SQLite 彩排會裝（<code>schema_sync.install_investigation_views</code>）。正式 Oracle 建議同樣建，方便 DBA／查案，<strong>不是</strong>業務契約。</p>
+    <table>
+      <thead><tr><th>View</th><th>用途</th><th>對應你的 SQL</th></tr></thead>
+      <tbody>
+        <tr><td><code>v_order_overview</code></td><td>每張單現在停在哪</td><td></td></tr>
+        <tr><td><code>v_order_errors</code></td><td>有 data_error 或失敗態</td><td></td></tr>
+        <tr><td><code>v_wafer_flags</code></td><td>缺 Alarm Type 或 DEFECT 的片</td><td></td></tr>
+        <tr><td><code>v_open_incidents</code></td><td>status=OPEN 的告警</td><td>接近 <code>SELECT * FROM incident WHERE status='OPEN'</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>要實作多少 DAO／程式才叫「符合 Oracle」</h2>
+    <p>若照上面收成 6 張：<strong>6 個 DAO + 一個 UnitOfWork</strong>。領域只認 Port。下面表格是<strong>現況 10 個 Port</strong>（還沒合併）。</p>
+    <table>
+      <thead><tr><th>#</th><th>Port</th><th>對應表</th><th>Memory</th><th>SQLite</th><th>Oracle</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><code>HoldOrderDao</code></td><td>SQLite <code>hold_order</code>／Oracle <code>MV_NXT_DEF_HOLD_ORDER_BT</code></td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>2</td><td><code>OrderWaferDao</code></td><td>order_wafer</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>3</td><td><code>HoldBindingDao</code></td><td>hold_binding</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>4</td><td><code>ActionJournalDao</code></td><td>action_command + action_history</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>5</td><td><code>IncidentDao</code></td><td>SQLite <code>incident</code>／Oracle <code>MV_NXT_DEF_HOLD_INCIDENT_BT</code></td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>6</td><td><code>AlarmOutboxDao</code></td><td>alarm_outbox</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>7</td><td><code>SystemControlDao</code></td><td>SQLite <code>agent_control</code>／Oracle <code>MV_NXT_PARAM_BT</code>（另實作）</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無（重用 PARAM）</span></td></tr>
+        <tr><td>8</td><td><code>SnapshotDao</code></td><td>observation_snapshot</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>9</td><td><code>DiscoveryCursorDao</code></td><td>discovery_cursor</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>10</td><td><code>InboundEventDao</code></td><td>inbound_event</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">無</span></td></tr>
+        <tr><td>—</td><td><code>UnitOfWork</code> + <code>Factory</code></td><td>交易邊界</td><td><span class="badge ok">有</span></td><td><span class="badge ok">有</span></td><td><span class="badge todo">只有丟錯的 stub</span></td></tr>
+      </tbody>
+    </table>
+    <p><strong>不是 10 支獨立程式。</strong>建議一個套件 <code>adapters/persistence/oracle/</code>：一個連線／一個 UoW，裡面 10 個 DAO class。方法簽名已寫在 <code>application/ports/persistence.py</code>。SQLite 實作是最接近的抄本。</p>
+    <p>現況：<code>load_oracle_factory()</code> 直接 <code>raise OracleNotImplemented</code>。</p>
+  </div>
+
+  <div class="card">
+    <h2>Oracle adapter 實作時，SQL 方言只能留在這裡</h2>
+    <table>
+      <thead><tr><th>項目</th><th>SQLite（已有）</th><th>Oracle（要寫）</th></tr></thead>
+      <tbody>
+        <tr><td>佔位符</td><td><code>?</code></td><td><code>:name</code></td></tr>
+        <tr><td>upsert</td><td>ON CONFLICT</td><td>MERGE 或先 update 再 insert</td></tr>
+        <tr><td>時間</td><td>ISO 文字</td><td>TIMESTAMP(6) WITH TIME ZONE；session UTC</td></tr>
+        <tr><td>大欄</td><td>TEXT</td><td>CLOB（payload_json、error_detail）</td></tr>
+        <tr><td>布林</td><td>0/1 INTEGER</td><td>NUMBER(1)，不用 BOOLEAN</td></tr>
+        <tr><td>搶單 try_claim</td><td>樂觀 <code>row_version</code></td><td>同一語意；必要時 SELECT FOR UPDATE 但不能跨 MES 呼叫持有鎖</td></tr>
+        <tr><td>驅動</td><td>sqlite3</td><td>oracledb／cx_Oracle；DSN／wallet 不進 DEV 設定範例</td></tr>
+      </tbody>
+    </table>
+    <p class="warn">usecase／domain <strong>禁止</strong> <code>if dialect == "oracle"</code>。切換只在 composition：<code>persistence.backend</code>。</p>
+  </div>
+
+  <div class="card">
+    <h2>還有哪些要一起考慮（不是表，但接 Oracle 會一起爆）</h2>
+    <ol class="tight">
+      <li><strong>雙 DDL 必須同步。</strong>加欄改 <code>sqlite.sql</code> 和 <code>oracle.sql</code>。禁止 Python ALTER。測試 <code>test_schema_dual_ddl.py</code> 會擋。</li>
+      <li><strong>主鍵 UUID 由應用層產生</strong>，不要用 Oracle SEQUENCE 當跨 adapter 契約。</li>
+      <li><strong>先 commit Intent，再呼叫 MES。</strong>MES 與 DB 不是同一筆分散式交易。網路期間不准長時間 row lock。</li>
+      <li><strong>Incident 與 Outbox 同交易。</strong>commit 成功才寄信；SENT 就結束通知。</li>
+      <li><strong>多 Worker 搶單：</strong><code>try_claim</code> 語意必須與 SQLite 契約測試相同（兩個 UoW 同時 claim，只能一個成功）。</li>
+      <li><strong>凍結 payload + idempotency_key。</strong>retry 同一包；換 Hold Code 是新動作。</li>
+      <li><strong>沒 FETCH 到的 MES 欄位不准編造</strong>（Created、FirstWaferId、request status）。Watchdog 時間標 ESTIMATED。</li>
+      <li><strong>UNKNOWN ≠ 空。</strong>Hold 查詢不明，不准當成沒有 Hold。</li>
+      <li><strong>這套表 ≠ MES。</strong>Hold／Release 真實效果在 HoldPort。Oracle 只記我們的訂單與意圖。</li>
+      <li><strong>PROD 還缺真實 MES／AI／進站 Port。</strong>現在 PROD 連 FakeWorld 都會被拒；接 Oracle 同時要接真實 HoldPort／AiPort／SmmPort／Notifier，否則只能把訂單寫進 Oracle、現場仍是假的。</li>
+      <li><strong>情境庫 SQLite 不要進生產。</strong><code>scenario_catalog</code>、<code>scenario_orders</code> 是題庫與查案產物。</li>
+      <li><strong>連線：</strong><code>ALTER SESSION SET TIME_ZONE = 'UTC'</code>；字元集 AL32UTF8；權限（建表／索引／選寫這 12 張）；連線池；憑證不進 git。</li>
+      <li><strong>契約測試。</strong>Memory + SQLite 已跑。Oracle 有 DSN 再跑同一檔：重複建單、row_version 衝突、雙 claim、Intent+Incident+Outbox rollback、system_control 重啟仍 DISABLED。</li>
+      <li><strong>你的查詢建議索引。</strong>常按 Lot 看未結案 → 考慮 <code>CREATE INDEX idx_incident_lot ON incident (lot_id, status);</code> 兩份 DDL 一起加。</li>
+      <li><strong>DDL 還留 TRANSFER_HOLD。</strong>程式已不送 transferHold。CHECK 裡還有這個 enum，接 Oracle 前可決定要不要從兩份 DDL 拿掉（拿掉要重建／遷移）。</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>建議落地順序</h2>
+    <ol>
+      <li>DBA 用 <code>Design/schema/oracle.sql</code> 在空 schema 建 12 張表（可再加 4 個 View）。</li>
+      <li>實作 <code>OracleUowFactory</code> + 10 DAO（從 SQLite uow 對譯佔位符／CLOB／時間）。</li>
+      <li>把現有 persistence contract 測試接到有 DSN 的 Oracle（沒 DSN 就 skip）。</li>
+      <li>yaml <code>persistence.backend: oracle</code>；DEV 繼續 sqlite。</li>
+      <li>真實 MES／AI／進站 adapter 另案，不要跟表混在一起。</li>
+    </ol>
+  </div>
+
+  <p class="muted">來源：<code>Design/schema/oracle.sql</code>、<code>sqlite.sql</code>、<code>src/vai_hold/application/ports/persistence.py</code>、<code>adapters/persistence/oracle/factory.py</code>（目前只有「尚未實作」）。</p>
+</main>
+</body>
+</html>

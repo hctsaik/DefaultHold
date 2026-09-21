@@ -105,9 +105,9 @@ CLI：`composition/cli.py` → `composition/bootstrap.py` → `App.run`。
 | A2-04 | 線上代解 → `MANUAL_CLOSED` | `derive.py` | `pipelines/confirm_hold.py`（C08；不是 HOLD_MISSING） |
 | A2-05 | WAIT_AI | `derive.py` + `domain/ai_complete.py` | `check_ai.py` |
 | A2-06 | AI 結果無效 | 同上 | `check_ai.py` |
-| A2-07 / A2-08 | 申請解除 | `derive.py` | `usecases/request_release.py` |
-| A2-09 | Defect 無 SMM Hold，掃完未滿 2 分鐘，暫不解 | `derive.py` | `check_ai.py` |
-| A2-21 | Defect 無 SMM Hold，掃完已滿 2 分鐘，申請解除（SCAN_COMPLETED） | `derive.py` | `check_ai.py` |
+| A2-09 | 已掃完，未滿 `release.scan_settle_minutes`，暫不解 | `derive.py` | `check_ai.py` |
+| A2-21 | 已掃完且滿 settle，申請解除（SCAN_COMPLETED；OK／NG 同一條） | `derive.py` | `usecases/request_release.py` |
+| A2-20 | 現場已有 SMM Hold，不設 Default Hold | `derive.py` | `set_default_hold.py` |
 | A2-10 | Release 查驗中 | `derive.py` | `usecases/verify_release.py` |
 | A2-11 | CLOSED | `verify_release.py` | 同上 |
 | A2-12 | RELEASE_FAILED | `verify_release.py` | 同上 |

@@ -56,9 +56,8 @@ def test_evidence_hold_release_transfer_retry_counts():
     assert [r.get("attempt_no") for r in rel_r] == [1, 2, 3]
 
     tr = events("transfer_retry_transient", "transfer.sent")
-    assert len(tr) == 3
-    tr_r = events("transfer_retry_transient", "transfer.receipt")
-    assert [r.get("attempt_no") for r in tr_r] == [1, 2, 3]
+    assert len(tr) == 0
 
     acc = (EVIDENCE / "transfer_memo_accumulate.md").read_text(encoding="utf-8")
-    assert "Please check #1,#2" in acc or "transfer.sent" in acc
+    assert "transfer.sent" not in acc
+    assert "Please check #1,#2" not in acc

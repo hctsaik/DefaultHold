@@ -19,7 +19,7 @@ from vai_hold.domain.enums import (
     WorkState,
 )
 from vai_hold.domain.models import HoldOrder
-from vai_hold.domain.ownership import is_smm_hold, match_our_holds
+from vai_hold.domain.ownership import match_our_holds
 from vai_hold.domain.retry import attempts_for
 
 if TYPE_CHECKING:
@@ -62,32 +62,10 @@ def verify_release(app: App, uow: UnitOfWork, order: HoldOrder, snap: Snapshot, 
                     b.release_verified_at = now
                     b.updated_at = now
                     uow.holds.update(b)
-            if order.ai_state.value == "COMPLETE_DEFECT":
-                smm = [
-                    h
-                    for h in mes
-                    if is_smm_hold(
-                        h,
-                        lot_id=order.lot_id,
-                        hold_code=app.settings.smm_hold_code,
-                        hold_user=app.settings.smm_hold_user,
-                        ope_no=order.target_hold_ope_no,
-                    )
-                ]
-                if not smm and order.close_reason != "SCAN_COMPLETED":
-                    order.work_state = WorkState.DEFECT_HOLD_UNCONFIRMED
-                    order.updated_at = now
-                    uow.orders.update(order, order.row_version)
-                    return
             order.lifecycle = Lifecycle.CLOSED
             order.work_state = WorkState.CLOSED
             order.protection_state = ProtectionState.RELEASED
-            if order.close_reason == "SCAN_COMPLETED":
-                pass
-            elif order.ai_state.value == "COMPLETE_OK":
-                order.close_reason = "AI_OK"
-            else:
-                order.close_reason = "TRANSFERRED"
+            order.close_reason = "SCAN_COMPLETED"
             order.last_rule_id = "A2-11"
             order.updated_at = now
             emit(Event.RELEASE_CONFIRMED, function_code=FN, rule_id="A2-11", extra=order_fields(order))

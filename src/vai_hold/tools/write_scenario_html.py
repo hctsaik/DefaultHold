@@ -21,7 +21,7 @@ GROUP_INTRO = {
     "happy": "串接走完（不是單格）。",
     "hold": "Default Hold 的設、查驗、衝突、消失、權限失敗。",
     "ai": "Wafer 掃片未齊、結果無效、AI 查詢 UNKNOWN。",
-    "smm": "SMM Hold（SMMH/AOA）接手，或 wafer-based memo 累積。",
+    "smm": "進站時現場已有 SMM Hold 則不設 Default Hold。本 Agent 不解、不改 SMM Hold。",
     "release": "申請解除 Default Hold：成功、被拒、timeout。",
     "target": "選防守站：目前站／未來量測站。",
     "control": "停用新 Hold、Resume、人工結案。",
@@ -46,6 +46,7 @@ CSS = """
     .badge.pass { background:#d1fae5; color:#065f46; }
     .badge.fail { background:#fee2e2; color:#991b1b; }
     .badge.none { background:#e7e5e4; color:#44403c; }
+    .badge.skip { background:#fef3c7; color:#92400e; }
     a { color:#0f766e; }
     tr.row:hover { background:#fafaf9; }
     tr.env td:first-child { color:#78716c; }
@@ -179,10 +180,11 @@ RULE_WHY = {
     "A2-04": "曾確認的 Default Hold 不見了，當線上代解並結案",
     "A2-05": "Default Hold 還在，片還沒掃完，不解",
     "A2-06": "掃片結果無效，不解 Default Hold",
-    "A2-07": "整批 OK，向 MES 申請解除 Default Hold",
-    "A2-08": "有 Defect 且現場已有 SMM Hold，申請解除 Default Hold",
-    "A2-09": "有 Defect、還沒 SMM Hold，掃完未滿 2 分鐘，暫不解",
-    "A2-21": "有 Defect、還沒 SMM Hold，掃完已滿 2 分鐘，申請解除 Default Hold",
+    "A2-07": "（已併入 A2-21）掃完且滿 settle，申請解除 Default Hold",
+    "A2-08": "（已併入 A2-21）掃完且滿 settle，申請解除 Default Hold",
+    "A2-09": "已全部掃完，還沒滿 config 的 settle 分鐘，暫不解",
+    "A2-21": "已全部掃完且滿 settle 分鐘，申請解除 Default Hold",
+    "A2-20": "現場已有 SMM Hold，不設 Default Hold",
     "A2-10": "已申請解除，向 MES 確認自己的 Default Hold 還在不在",
     "A2-11": "自己的 Default Hold 已沒有，結案",
     "A2-12": "解除失敗，Default Hold 留著",
@@ -202,6 +204,7 @@ RULE_TO_ACTION = {
     "A2-08": "SET_RELEASE",
     "A2-09": "NONE",
     "A2-21": "SET_RELEASE",
+    "A2-20": "NONE",
     "A2-10": "VERIFY_RELEASE",
     "A2-11": "NONE",
     "A2-12": "OPEN_INCIDENT",
@@ -236,7 +239,7 @@ def _facts_decision_bridge(actual: dict) -> str:
     action = (actual.get("judgment") or {}).get("action") or ""
     why = RULE_WHY.get(str(rule), "")
     act_key = str(action) or RULE_TO_ACTION.get(str(rule), "")
-    if str(rule) in {"A1-04", "A2-04", "A2-05", "A2-09", "A2-11", "A2-21"}:
+    if str(rule) in {"A1-04", "A2-04", "A2-05", "A2-09", "A2-11", "A2-20", "A2-21"}:
         act_biz = RULE_WHY.get(str(rule), "")
     else:
         act_biz = ACTION_WHY.get(act_key, "") or why or "見各欄"
@@ -289,13 +292,17 @@ def _facts_decision_bridge(actual: dict) -> str:
     else:
         inflight_txt = "沒有"
 
-    err_txt = "該有 SMM Hold 卻沒有" if err else "沒有"
+    if err and str(err) != "NO_SMM_HOLD_AFTER_SCAN":
+        err_txt = str(err)
+    else:
+        err_txt = "沒有"
+        err = None
 
     drive_hold = str(rule) in {"A1-03", "A2-02", "A2-04", "A2-11"}
-    drive_smm = str(rule) in {"A2-08", "A2-09", "A2-16"}
-    drive_ai = str(rule) in {"A2-05", "A2-06", "A2-07", "A2-08", "A2-09"}
+    drive_smm = str(rule) in {"A2-20"}
+    drive_ai = str(rule) in {"A2-05", "A2-06", "A2-09", "A2-21"}
     drive_inf = str(rule) in {"A2-01", "A2-10"}
-    drive_err = bool(err) or str(rule) == "A2-09"
+    drive_err = bool(err)
 
     cols: list[tuple[str, str, bool, bool]] = []
     if ch["default"] or drive_hold:
@@ -339,10 +346,12 @@ def _observed_channels(actual: dict) -> dict[str, bool]:
         default = False
     if prot == "SET_PENDING":
         default = False
+    rule = str((actual.get("judgment") or {}).get("rule_id") or actual.get("last_rule_id") or "")
     return {
         "lot": lot,
         "default": default,
-        "smm": "check" in fns or "release" in fns,
+        # 解 Hold 不看 SMMH。只有 D04（進站已有 → 不設 Default Hold）才當 Facts。
+        "smm": rule == "A2-20",
         "ai": "check" in fns,
     }
 
@@ -351,6 +360,13 @@ def _json_block(value) -> str:
     if value is None:
         return "<span class='muted'>—</span>"
     return f"<pre>{html.escape(json.dumps(value, ensure_ascii=False, indent=2, default=str))}</pre>"
+
+
+def _public_actions(actions: dict | None) -> dict:
+    """查案頁不列 transfer：本 Agent 不再改現場其他 Hold 的 Memo。"""
+    out = dict(actions or {})
+    out.pop("transfer", None)
+    return out
 
 
 def _smm_facts(smm: dict | None) -> dict | None:
@@ -382,7 +398,7 @@ def _this_cell_did(actual: dict) -> str:
     """這一格做的事，不是劇本前面累積的 set_hold 次數。"""
     rule = str(actual.get("last_rule_id") or "")
     action = str((actual.get("judgment") or {}).get("action") or RULE_TO_ACTION.get(rule) or "")
-    if rule in {"A1-04", "A2-04", "A2-05", "A2-09", "A2-11", "A2-21"}:
+    if rule in {"A1-04", "A2-04", "A2-05", "A2-09", "A2-11", "A2-20", "A2-21"}:
         return RULE_WHY[rule]
     biz = ACTION_WHY.get(action) or RULE_WHY.get(rule) or "見本頁「為什麼做這一步」"
     place = _hold_place(actual)
@@ -421,6 +437,8 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
     marks: dict[str, str] = {}
     here = actual.get("work_state") or ""
     data_error = actual.get("data_error")
+    if data_error == "NO_SMM_HOLD_AFTER_SCAN":
+        data_error = None
     close_reason = actual.get("close_reason")
     if path.is_file():
         conn = sqlite3.connect(path)
@@ -432,43 +450,40 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
                 if "operation_start_at" in keys:
                     marks["進站"] = o["operation_start_at"]
                 data_error = data_error or (o["data_error"] if "data_error" in keys else None)
+                if data_error == "NO_SMM_HOLD_AFTER_SCAN":
+                    data_error = None
                 close_reason = close_reason or (o["close_reason"] if "close_reason" in keys else None)
                 here = here or (o["work_state"] if "work_state" in keys else "")
             row = conn.execute(
-                "SELECT created_at FROM action_command WHERE action_type='SET_HOLD' ORDER BY created_at LIMIT 1"
+                "SELECT created_at FROM mes_action WHERE action_type='SET_HOLD' ORDER BY created_at LIMIT 1"
             ).fetchone()
             if row:
-                marks["送出 Default Hold"] = row["created_at"]
+                marks["送出 Default Hold"] = row[0]
             row = conn.execute(
-                "SELECT first_confirmed_at FROM hold_binding WHERE role='PREVENTIVE' AND first_confirmed_at IS NOT NULL ORDER BY first_confirmed_at LIMIT 1"
+                "SELECT dh_first_confirmed_at FROM hold_order WHERE dh_first_confirmed_at IS NOT NULL ORDER BY dh_first_confirmed_at LIMIT 1"
             ).fetchone()
             if row:
-                marks["確認 Default Hold 存在"] = row["first_confirmed_at"]
+                marks["確認 Default Hold 存在"] = row[0]
             row = conn.execute(
-                "SELECT created_at FROM action_command WHERE action_type='SET_RELEASE' ORDER BY created_at LIMIT 1"
+                "SELECT created_at FROM mes_action WHERE action_type='SET_RELEASE' ORDER BY created_at LIMIT 1"
             ).fetchone()
             if row:
-                marks["解除 Default Hold"] = row["created_at"]
+                marks["解除 Default Hold"] = row[0]
             row = conn.execute(
-                "SELECT released_at FROM hold_binding WHERE released_at IS NOT NULL ORDER BY released_at LIMIT 1"
+                "SELECT dh_released_at FROM hold_order WHERE dh_released_at IS NOT NULL ORDER BY dh_released_at LIMIT 1"
             ).fetchone()
             if row:
-                marks["確認解除 Default Hold"] = row["released_at"]
+                marks["確認解除 Default Hold"] = row[0]
             if o and o["lifecycle"] in {"CLOSED", "MANUAL_CLOSED"}:
                 marks["結案"] = o["updated_at"] if "updated_at" in o.keys() else o["last_evaluated_at"]
         except sqlite3.Error:
             pass
         conn.close()
-    smm_holds = ((_smm_facts((actual.get("facts") or {}).get("SmmHold")) or {}).get("Holds") or [])
-    if _observed_channels(actual).get("smm") and smm_holds:
-        rec = ((actual.get("facts") or {}).get("Lot") or {}).get("RecTime")
-        marks["確認 SMM Hold 存在"] = rec or "有"
 
     cols = [
         "進站",
         "送出 Default Hold",
         "確認 Default Hold 存在",
-        "確認 SMM Hold 存在",
         "解除 Default Hold",
         "確認解除 Default Hold",
         "結案",
@@ -478,7 +493,6 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
         "HOLD_VERIFY_PENDING": "送出 Default Hold",
         "WAIT_AI": "確認 Default Hold 存在",
         "PROTECTION_CONFIRMED": "確認 Default Hold 存在",
-        "DEFECT_HOLD_UNCONFIRMED": "確認 SMM Hold 存在",
         "RELEASE_SENT": "解除 Default Hold",
         "RELEASE_VERIFY_PENDING": "解除 Default Hold",
         "RELEASE_FAILED": "解除 Default Hold",
@@ -561,16 +575,24 @@ def _timeline_items(script: list[dict], actual: dict) -> list[dict]:
     from vai_hold.application.scenario_present import describe_step, flatten_script
 
     stored = actual.get("timeline") or []
-    if stored:
-        return stored
     items = []
-    for step in flatten_script(script):
-        info = describe_step(step)
+    for i, step in enumerate(flatten_script(script)):
+        info = dict(describe_step(step))
         if step.get("_repeat"):
-            info = dict(info)
             info["title"] = f"{info['title']}（第 {step['_repeat']} 次）"
+        prev = stored[i] if i < len(stored) else {}
+        if prev.get("at"):
+            info["at"] = prev["at"]
+        if prev.get("when") is not None:
+            info["when"] = prev["when"]
+        if prev.get("kind") == "given":
+            info["kind"] = "given"
+        if prev.get("fn"):
+            info["fn"] = prev["fn"]
+        if prev.get("work_state"):
+            info["work_state"] = prev["work_state"]
         items.append(info)
-    return items
+    return items or stored
 
 
 def _mm_label(i: int, item: dict) -> str:
@@ -601,7 +623,7 @@ STATE_PURPOSE = {
     "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘",
     "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解",
     "READY_RELEASE_OK": "可以申請解除 Default Hold",
-    "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold",
+    "READY_RELEASE_HANDOFF": "已掃完且滿 settle，可解 Default Hold",
     "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上",
     "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗",
     "RELEASE_FAILED": "解除失敗，Hold 還在",
@@ -727,8 +749,8 @@ def render_case_html(
         for i, it in enumerate(items, 1)
     )
     expect_rows = "".join(
-        f"<tr><td><code>{html.escape(k)}</code></td><td>{_cell(v)}</td>"
-        f"<td>{_cell(actual.get('facts') if k == 'facts' else actual.get(k))}</td></tr>"
+        f"<tr><td><code>{html.escape(k)}</code></td><td>{_cell(_public_actions(v) if k == 'actions' else v)}</td>"
+        f"<td>{_cell(_public_actions(actual.get(k)) if k == 'actions' else (actual.get('facts') if k == 'facts' else actual.get(k)))}</td></tr>"
         for k, v in case.expect.items()
         if k not in {"lot_id", "ope", "rw"}
     )
@@ -851,7 +873,7 @@ def render_case_html(
     <tbody>{script_rows}</tbody></table>
     {compare_block}
     <h3>actions</h3>
-    {_json_block(actual.get("actions"))}
+    {_json_block(_public_actions(actual.get("actions")))}
     <p class="muted">scenario_run {html.escape(ran_at)}</p>
   </details>"""
     return f"""<!DOCTYPE html>
@@ -928,15 +950,15 @@ def _index_machine(link_prefix: str) -> str:
   NEED_HOLD --> HOLD_VERIFY_PENDING: C01 送出 Default Hold
   HOLD_VERIFY_PENDING --> WAIT_AI: C02 確認存在
   WAIT_AI --> WAIT_AI: C03 等掃片
-  WAIT_AI --> RELEASE_SENT: C04 申請解除
+  WAIT_AI --> RELEASE_SENT: C04 掃完+settle 申請解除
   RELEASE_SENT --> RELEASE_VERIFY_PENDING: C05 查驗解除
   RELEASE_VERIFY_PENDING --> CLOSED: C06 確認已解除
   CLOSED --> [*]
   NEED_HOLD --> HOLD_VERIFY_PENDING: C07 改用下一個 Hold Code
   WAIT_AI --> CLOSED: C08 線上代解
-  WAIT_AI --> RELEASE_SENT: C09 無 SMM Hold 逾時解
-  WAIT_AI --> RELEASE_SENT: C10 有 SMM Hold 後申請解除
-  RELEASE_VERIFY_PENDING --> CLOSED: C11 確認已解除（SMM 仍在）
+  WAIT_AI --> RELEASE_SENT: C09 NG 同樣 settle 後解
+  WAIT_AI --> RELEASE_SENT: C10 Defect 同樣 settle 後解
+  RELEASE_VERIFY_PENDING --> CLOSED: C11 確認已解除
 {notes}
 """
 
@@ -945,7 +967,8 @@ def render_index_html(rows: list[dict], *, link_prefix: str) -> str:
     total = len(rows)
     passed = sum(1 for r in rows if r["passed"] is True)
     failed = sum(1 for r in rows if r["passed"] is False)
-    missing = sum(1 for r in rows if r["passed"] is None)
+    skipped = sum(1 for r in rows if r.get("badge") == "skip")
+    missing = sum(1 for r in rows if r["passed"] is None and r.get("badge") != "skip")
     groups: dict[str, list[dict]] = {}
     for r in rows:
         groups.setdefault(r["group"], []).append(r)
@@ -1026,13 +1049,52 @@ def render_index_html(rows: list[dict], *, link_prefix: str) -> str:
   </div>''' if OPEN_ISSUES else ""}
   <p><span class="badge pass">通過 {passed}</span>
      <span class="badge fail">失敗 {failed}</span>
-     <span class="badge none">尚無 run {missing}</span>
+     {f'<span class="badge skip">現場不適用，不跑 {skipped}</span>' if skipped else ""}
+     {f'<span class="badge none">尚無 run {missing}</span>' if missing else ""}
      共 {total} 筆</p>
   <p class="muted">資料庫 <code>Design/generated/scenario_catalog.sqlite</code>。
     本頁通過＝offline 邏輯（D12）；上線再用程式對 MES 確認。</p>
 </header>
 <main>
 {''.join(blocks)}
+</main>
+</body>
+</html>
+"""
+
+
+def render_skipped_html(case, *, index_href: str) -> str:
+    """題庫關掉的題：不是漏跑，是現場不適用所以故意不跑。"""
+    spec = case.spec or {}
+    why = spec.get("given") or spec.get("do") or case.title
+    return f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>{html.escape(case.scenario_id)} — 現場不適用，不跑</title>
+  <style>{CSS}</style>
+</head>
+<body>
+<header>
+  <p><a href="{html.escape(index_href)}">← 全部情境</a></p>
+  <h1>{html.escape(case.scenario_id)}　{html.escape(case.title)}</h1>
+  <p><span class="badge skip">現場不適用，不跑</span></p>
+</header>
+<main>
+  <div class="verdict" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">
+    結論：這題<strong>故意不跑</strong>，不是漏測。
+    <div class="sub">現場 MES 一定能回答這批有沒有 Hold。list_holds 只會是「有」或「沒有」，不會是 UNKNOWN。所以不當驗收、也不進每日回歸。</div>
+  </div>
+  <div class="card spec">
+    <h2>為什麼在清單裡還看得到</h2>
+    <p>V1 編號還在，避免以為題號斷了。點進來是為了說明「為什麼不跑」，不是等補跑。</p>
+    <table>
+      <tr><th>現場已經</th><td>{html.escape(spec.get("given") or why)}</td></tr>
+      <tr><th>實際系統會做</th><td><strong>{html.escape(spec.get("do") or "")}</strong></td></tr>
+      <tr><th>做完應看到</th><td>{html.escape(spec.get("then") or "不列入驗收。")}</td></tr>
+      <tr><th>禁止</th><td>{html.escape(spec.get("dont") or spec.get("forbidden") or "")}</td></tr>
+    </table>
+  </div>
 </main>
 </body>
 </html>
@@ -1057,6 +1119,25 @@ def write_all_scenario_html() -> Path:
     rows = []
     for case in cat.list_all():
         stored = cat.latest_run(case.scenario_id)
+        if not case.enabled:
+            (OUT_DIR / f"{case.scenario_id}.html").write_text(
+                render_skipped_html(case, index_href="index.html"),
+                encoding="utf-8",
+            )
+            rows.append(
+                {
+                    "n": case.sort_order,
+                    "id": case.scenario_id,
+                    "title": case.title,
+                    "do": ((case.spec or {}).get("do") or case.title).split("。")[0],
+                    "group": case.group_name,
+                    "passed": None,
+                    "badge": "skip",
+                    "badge_text": "現場不適用，不跑",
+                    "now": "MES 一定能回答有沒有 Hold；這題不當驗收",
+                }
+            )
+            continue
         if stored is None:
             rows.append(
                 {

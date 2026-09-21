@@ -10,7 +10,6 @@ from vai_hold.application.logevents import Event
 from vai_hold.domain.derive import Snapshot
 from vai_hold.domain.enums import (
     ActionState,
-    AiState,
     BindingRole,
     BindingStatus,
     Lifecycle,
@@ -20,7 +19,6 @@ from vai_hold.domain.enums import (
     WorkState,
 )
 from vai_hold.domain.ai_complete import expected_complete
-from vai_hold.domain.ownership import is_smm_hold
 from vai_hold.domain.retry import next_attempt_no, state_after_receipt
 
 _RESOLVE_SKIP = frozenset(
@@ -111,8 +109,7 @@ def snapshot(app: App, uow: UnitOfWork, order: HoldOrder, *, persist_ai: bool = 
             if row is None:
                 continue
             result = (v.result or "").strip() or None
-            missing = bool(v.scan_completed_at and not result)
-            if missing:
+            if v.scan_completed_at and not result:
                 result = "OK"
             changed = False
             if v.scan_completed_at and row.scan_completed_at != v.scan_completed_at:
@@ -120,9 +117,6 @@ def snapshot(app: App, uow: UnitOfWork, order: HoldOrder, *, persist_ai: bool = 
                 changed = True
             if result and row.ai_result != result:
                 row.ai_result = result
-                changed = True
-            if missing and not row.missing_alarm_type:
-                row.missing_alarm_type = True
                 changed = True
             if changed:
                 row.updated_at = now
@@ -149,6 +143,7 @@ def snapshot(app: App, uow: UnitOfWork, order: HoldOrder, *, persist_ai: bool = 
         smm_hold_step=app.settings.smm_hold_step,
         smm_memo_template=app.settings.smm_memo_template,
         max_action_attempts=app.settings.max_action_attempts,
+        scan_settle_minutes=int(app.settings.scan_settle_minutes),
         now=app.clock.now(),
     )
 
@@ -160,12 +155,7 @@ def apply_projection(order: HoldOrder, decision: Decision, now: datetime) -> boo
     if decision.reason == "scan_completed":
         want_close = "SCAN_COMPLETED"
     elif decision.work_state == WorkState.CLOSED:
-        if order.close_reason == "SCAN_COMPLETED" or decision.reason == "scan_completed":
-            want_close = "SCAN_COMPLETED"
-        elif decision.ai_state == AiState.COMPLETE_OK:
-            want_close = "AI_OK"
-        else:
-            want_close = "TRANSFERRED"
+        want_close = "SCAN_COMPLETED"
     elif decision.work_state == WorkState.MANUAL_CLOSED:
         want_close = "MANUAL"
     if (
@@ -190,12 +180,7 @@ def apply_projection(order: HoldOrder, decision: Decision, now: datetime) -> boo
         order.close_reason = "SCAN_COMPLETED"
     if decision.work_state == WorkState.CLOSED:
         order.lifecycle = Lifecycle.CLOSED
-        if order.close_reason == "SCAN_COMPLETED" or decision.reason == "scan_completed":
-            order.close_reason = "SCAN_COMPLETED"
-        elif decision.ai_state == AiState.COMPLETE_OK:
-            order.close_reason = "AI_OK"
-        else:
-            order.close_reason = "TRANSFERRED"
+        order.close_reason = "SCAN_COMPLETED"
     if decision.work_state == WorkState.MANUAL_CLOSED:
         order.lifecycle = Lifecycle.MANUAL_CLOSED
         order.close_reason = "MANUAL"
@@ -224,26 +209,9 @@ def assign_order(order: HoldOrder, now: datetime, **fields) -> bool:
 
 
 def maybe_resolve_order_incidents(app, uow, order: HoldOrder, snap, now: datetime) -> None:
-    """SMM Hold 在 Default Hold 站，或所有 wafer 已掃完 → 結案該訂單 OPEN 告警。寄信成功即通知結束。"""
-    mes = (
-        list(snap.hold_query.value or [])
-        if snap.hold_query.status in (SourceStatus.FOUND, SourceStatus.NOT_FOUND)
-        else []
-    )
-    smm = [
-        h
-        for h in mes
-        if order.target_hold_ope_no
-        and is_smm_hold(
-            h,
-            lot_id=order.lot_id,
-            hold_code=app.settings.smm_hold_code,
-            hold_user=app.settings.smm_hold_user,
-            ope_no=order.target_hold_ope_no,
-        )
-    ]
+    """所有 wafer 已掃完 → 結案該訂單 OPEN 告警。寄信成功即通知結束。不看 SMM Hold。"""
     ai_status, _ = expected_complete(snap.expected_wafer_ids, snap.ai_views, rework_count=order.rework_count)
-    if not smm and ai_status not in {"COMPLETE_OK", "COMPLETE_DEFECT"}:
+    if ai_status not in {"COMPLETE_OK", "COMPLETE_DEFECT"}:
         return
     for inc in uow.incidents.list_open(500):
         if inc.incident_type in _RESOLVE_SKIP:

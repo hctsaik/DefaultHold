@@ -1,6 +1,6 @@
 # Evidence：`transfer_memo_accumulate`
 
-**情境：** Wafer-based：Please check #1 → transferHold #1,#2
+**情境：** 未掃完：本 Agent 不改 SMM Memo
 
 這份是程式自己印的 log 切片，不是事後摘要。
 
@@ -8,7 +8,7 @@
 
 - set_hold calls: `1`
 - release calls: `0`
-- transfer calls: `1`
+- transfer calls: `None`
 - work_state: `WAIT_AI`
 - lifecycle: `OPEN`
 
@@ -18,10 +18,6 @@
 - `hold.sent` `SET_DEFAULT_HOLD_BY_Operation_Start` rule=`A1-03` receipt=`None`
 - `hold.receipt` `SET_DEFAULT_HOLD_BY_Operation_Start` rule=`A1-03` receipt=`ACCEPTED` attempt_no=1
 - `hold.confirmed` `CONFIRM_DEFAULT_HOLD_EXISTS` rule=`A2-02` receipt=`None`
-- `transfer.intent` `CHECK_AI_SCAN_COMPLETE` rule=`A2-16` receipt=`None`
-- `transfer.sent` `CHECK_AI_SCAN_COMPLETE` rule=`A2-16` receipt=`None`
-- `transfer.receipt` `CHECK_AI_SCAN_COMPLETE` rule=`A2-16` receipt=`ACCEPTED` attempt_no=1
-- `transfer.confirmed` `CHECK_AI_SCAN_COMPLETE` rule=`A2-16` receipt=`None`
 
 ## 每一輪 EVAL（Facts → State → Decision）
 
@@ -58,7 +54,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
+    "OrderId": "20260101-000000814-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "NEED_HOLD",
     "ProtectionState": "NONE",
@@ -140,7 +136,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
+    "OrderId": "20260101-000000814-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "HOLD_VERIFY_PENDING",
     "ProtectionState": "SET_PENDING",
@@ -247,7 +243,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
+    "OrderId": "20260101-000000814-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -363,7 +359,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
+    "OrderId": "20260101-000000814-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -479,7 +475,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
+    "OrderId": "20260101-000000814-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -529,474 +525,6 @@
   "ai_gate": "WAITING",
   "expected_count": 25,
   "missing_count": 24,
-  "new_hold_allowed": true,
-  "defect_handoff_ready": true
-}
-```
-
-</details>
-
-### EVAL 6 `CHECK_AI_SCAN_COMPLETE`
-
-- **DECISION** `A2-16` / `smm_memo_transfer` action=`TRANSFER_HOLD`
-
-<details><summary>OBSERVED（原始 Facts）</summary>
-
-```json
-{
-  "Lot": {
-    "LotId": "LOT1",
-    "OpeNo": "OP100",
-    "ReworkCount": 0,
-    "ToolId": "EQP01",
-    "RouteId": "RT1",
-    "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "DefaultHold": {
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "RouteId": "RT1",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it."
-      }
-    ]
-  },
-  "SmmHold": {
-    "StepMode": "DefaultHoldStep",
-    "OpeNo": "OP200",
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "HoldCode": "SMMH",
-        "HoldUser": "AOA",
-        "HoldType": "SMMH",
-        "HoldMemo": "Please check #1"
-      }
-    ]
-  },
-  "AiScan": {
-    "QueryStatus": "FOUND",
-    "ExpectedCount": 25,
-    "ScannedCount": 2,
-    "LatestScanTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "Flow": {
-    "MainPdId": "RT1",
-    "FutureHoldStep": "OP200",
-    "FutureHoldOpeName": "August"
-  },
-  "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
-    "Lifecycle": "OPEN",
-    "WorkState": "WAIT_AI",
-    "ProtectionState": "CONFIRMED",
-    "AiState": "WAITING",
-    "LastRuleId": "A2-05",
-    "StateReason": "ai_incomplete",
-    "CloseReason": null,
-    "DataError": null,
-    "TargetOpeNo": "OP200",
-    "OperationStartAt": "2026-01-01T00:00:00Z",
-    "Bindings": [
-      {
-        "Status": "CONFIRMED",
-        "Role": "PREVENTIVE",
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it.",
-        "BackupHoldOrder": 1,
-        "TimeQuality": "ESTIMATED",
-        "RequestedAt": "2026-01-01T00:00:00Z",
-        "FirstConfirmedAt": "2026-01-01T00:00:00Z"
-      }
-    ],
-    "ActionInFlight": null
-  }
-}
-```
-
-</details>
-
-<details><summary>STATE</summary>
-
-```json
-{
-  "lifecycle": "OPEN",
-  "work_state": "WAIT_AI",
-  "protection_state": "CONFIRMED",
-  "ai_state": "WAITING",
-  "hold_present": true,
-  "ours_hold_count": 1,
-  "hold_query": "FOUND",
-  "hold_query_ok": true,
-  "unverified_set_hold": false,
-  "unverified_release": false,
-  "ai_gate": "WAITING",
-  "expected_count": 25,
-  "missing_count": 23,
-  "new_hold_allowed": true,
-  "defect_handoff_ready": true
-}
-```
-
-</details>
-
-### EVAL 7 `CHECK_AI_SCAN_COMPLETE`
-
-- **DECISION** `A2-16` / `smm_memo_transfer` action=`TRANSFER_HOLD`
-
-<details><summary>OBSERVED（原始 Facts）</summary>
-
-```json
-{
-  "Lot": {
-    "LotId": "LOT1",
-    "OpeNo": "OP100",
-    "ReworkCount": 0,
-    "ToolId": "EQP01",
-    "RouteId": "RT1",
-    "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "DefaultHold": {
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "RouteId": "RT1",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it."
-      }
-    ]
-  },
-  "SmmHold": {
-    "StepMode": "DefaultHoldStep",
-    "OpeNo": "OP200",
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "HoldCode": "SMMH",
-        "HoldUser": "AOA",
-        "HoldType": "SMMH",
-        "HoldMemo": "Please check #1,#2"
-      }
-    ]
-  },
-  "AiScan": {
-    "QueryStatus": "FOUND",
-    "ExpectedCount": 25,
-    "ScannedCount": 2,
-    "LatestScanTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "Flow": {
-    "MainPdId": "RT1",
-    "FutureHoldStep": "OP200",
-    "FutureHoldOpeName": "August"
-  },
-  "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
-    "Lifecycle": "OPEN",
-    "WorkState": "WAIT_AI",
-    "ProtectionState": "CONFIRMED",
-    "AiState": "WAITING",
-    "LastRuleId": "A2-16",
-    "StateReason": "smm_memo_transfer",
-    "CloseReason": null,
-    "DataError": null,
-    "TargetOpeNo": "OP200",
-    "OperationStartAt": "2026-01-01T00:00:00Z",
-    "Bindings": [
-      {
-        "Status": "CONFIRMED",
-        "Role": "PREVENTIVE",
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it.",
-        "BackupHoldOrder": 1,
-        "TimeQuality": "ESTIMATED",
-        "RequestedAt": "2026-01-01T00:00:00Z",
-        "FirstConfirmedAt": "2026-01-01T00:00:00Z"
-      }
-    ],
-    "ActionInFlight": {
-      "ActionType": "TRANSFER_HOLD",
-      "ActionState": "ACKNOWLEDGED",
-      "HoldCode": "SMMH"
-    }
-  }
-}
-```
-
-</details>
-
-<details><summary>STATE</summary>
-
-```json
-{
-  "lifecycle": "OPEN",
-  "work_state": "WAIT_AI",
-  "protection_state": "CONFIRMED",
-  "ai_state": "WAITING",
-  "hold_present": true,
-  "ours_hold_count": 1,
-  "hold_query": "FOUND",
-  "hold_query_ok": true,
-  "unverified_set_hold": false,
-  "unverified_release": false,
-  "ai_gate": "WAITING",
-  "expected_count": 25,
-  "missing_count": 23,
-  "new_hold_allowed": true,
-  "defect_handoff_ready": true
-}
-```
-
-</details>
-
-### EVAL 8 `CHECK_AI_SCAN_COMPLETE`
-
-- **DECISION** `A2-05` / `ai_incomplete` action=`CHECK_AI`
-
-<details><summary>OBSERVED（原始 Facts）</summary>
-
-```json
-{
-  "Lot": {
-    "LotId": "LOT1",
-    "OpeNo": "OP100",
-    "ReworkCount": 0,
-    "ToolId": "EQP01",
-    "RouteId": "RT1",
-    "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "DefaultHold": {
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "RouteId": "RT1",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it."
-      }
-    ]
-  },
-  "SmmHold": {
-    "StepMode": "DefaultHoldStep",
-    "OpeNo": "OP200",
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "HoldCode": "SMMH",
-        "HoldUser": "AOA",
-        "HoldType": "SMMH",
-        "HoldMemo": "Please check #1,#2"
-      }
-    ]
-  },
-  "AiScan": {
-    "QueryStatus": "FOUND",
-    "ExpectedCount": 25,
-    "ScannedCount": 2,
-    "LatestScanTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "Flow": {
-    "MainPdId": "RT1",
-    "FutureHoldStep": "OP200",
-    "FutureHoldOpeName": "August"
-  },
-  "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
-    "Lifecycle": "OPEN",
-    "WorkState": "WAIT_AI",
-    "ProtectionState": "CONFIRMED",
-    "AiState": "WAITING",
-    "LastRuleId": "A2-16",
-    "StateReason": "smm_memo_transfer",
-    "CloseReason": null,
-    "DataError": null,
-    "TargetOpeNo": "OP200",
-    "OperationStartAt": "2026-01-01T00:00:00Z",
-    "Bindings": [
-      {
-        "Status": "CONFIRMED",
-        "Role": "PREVENTIVE",
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it.",
-        "BackupHoldOrder": 1,
-        "TimeQuality": "ESTIMATED",
-        "RequestedAt": "2026-01-01T00:00:00Z",
-        "FirstConfirmedAt": "2026-01-01T00:00:00Z"
-      }
-    ],
-    "ActionInFlight": null
-  }
-}
-```
-
-</details>
-
-<details><summary>STATE</summary>
-
-```json
-{
-  "lifecycle": "OPEN",
-  "work_state": "WAIT_AI",
-  "protection_state": "CONFIRMED",
-  "ai_state": "WAITING",
-  "hold_present": true,
-  "ours_hold_count": 1,
-  "hold_query": "FOUND",
-  "hold_query_ok": true,
-  "unverified_set_hold": false,
-  "unverified_release": false,
-  "ai_gate": "WAITING",
-  "expected_count": 25,
-  "missing_count": 23,
-  "new_hold_allowed": true,
-  "defect_handoff_ready": true
-}
-```
-
-</details>
-
-### EVAL 9 `CHECK_AI_SCAN_COMPLETE`
-
-- **DECISION** `A2-05` / `ai_incomplete` action=`CHECK_AI`
-
-<details><summary>OBSERVED（原始 Facts）</summary>
-
-```json
-{
-  "Lot": {
-    "LotId": "LOT1",
-    "OpeNo": "OP100",
-    "ReworkCount": 0,
-    "ToolId": "EQP01",
-    "RouteId": "RT1",
-    "OperationStartTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "DefaultHold": {
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "RouteId": "RT1",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it."
-      }
-    ]
-  },
-  "SmmHold": {
-    "StepMode": "DefaultHoldStep",
-    "OpeNo": "OP200",
-    "QueryStatus": "FOUND",
-    "Holds": [
-      {
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "OpeName": "August",
-        "HoldCode": "SMMH",
-        "HoldUser": "AOA",
-        "HoldType": "SMMH",
-        "HoldMemo": "Please check #1,#2"
-      }
-    ]
-  },
-  "AiScan": {
-    "QueryStatus": "FOUND",
-    "ExpectedCount": 25,
-    "ScannedCount": 2,
-    "LatestScanTime": "2026-01-01T00:00:00Z",
-    "RecTime": "2026-01-01T00:00:00Z"
-  },
-  "Flow": {
-    "MainPdId": "RT1",
-    "FutureHoldStep": "OP200",
-    "FutureHoldOpeName": "August"
-  },
-  "OrderDb": {
-    "OrderId": "20260101-000000979-EQP01",
-    "Lifecycle": "OPEN",
-    "WorkState": "WAIT_AI",
-    "ProtectionState": "CONFIRMED",
-    "AiState": "WAITING",
-    "LastRuleId": "A2-05",
-    "StateReason": "ai_incomplete",
-    "CloseReason": null,
-    "DataError": null,
-    "TargetOpeNo": "OP200",
-    "OperationStartAt": "2026-01-01T00:00:00Z",
-    "Bindings": [
-      {
-        "Status": "CONFIRMED",
-        "Role": "PREVENTIVE",
-        "RouteId": "RT1",
-        "OpeNo": "OP200",
-        "HoldCode": "ENHL",
-        "HoldUser": "ABO",
-        "HoldMemo": "SMM Default Hold : SMM will auto release this hold, if this hold not auto release > 30 mins , please contact LIT onduty to manual release it.",
-        "BackupHoldOrder": 1,
-        "TimeQuality": "ESTIMATED",
-        "RequestedAt": "2026-01-01T00:00:00Z",
-        "FirstConfirmedAt": "2026-01-01T00:00:00Z"
-      }
-    ],
-    "ActionInFlight": null
-  }
-}
-```
-
-</details>
-
-<details><summary>STATE</summary>
-
-```json
-{
-  "lifecycle": "OPEN",
-  "work_state": "WAIT_AI",
-  "protection_state": "CONFIRMED",
-  "ai_state": "WAITING",
-  "hold_present": true,
-  "ours_hold_count": 1,
-  "hold_query": "FOUND",
-  "hold_query_ok": true,
-  "unverified_set_hold": false,
-  "unverified_release": false,
-  "ai_gate": "WAITING",
-  "expected_count": 25,
-  "missing_count": 23,
   "new_hold_allowed": true,
   "defect_handoff_ready": true
 }

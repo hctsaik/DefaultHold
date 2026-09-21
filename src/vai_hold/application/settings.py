@@ -24,6 +24,7 @@ class Settings:
     hold_codes: list[str]
     release_user: str
     release_memo: str
+    scan_settle_minutes: int
     station_priority: list[str]
     watchdog_minutes: int
     disable_after_overdue_lots: int
@@ -95,6 +96,7 @@ def load_settings(path: str | Path | None = None, overrides: dict | None = None)
         hold_codes=[str(c) for c in codes],
         release_user=str(release.get("user") or hold.get("user") or "ABO"),
         release_memo=str(release.get("memo") or DEFAULT_RELEASE_MEMO),
+        scan_settle_minutes=max(0, int(release.get("scan_settle_minutes") if release.get("scan_settle_minutes") is not None else 2)),
         station_priority=[str(s) for s in (stations.get("priority") or ["August", "Overlay", "CDSEM"])],
         watchdog_minutes=int(defense.get("watchdog_minutes") or 30),
         disable_after_overdue_lots=int(defense.get("disable_new_hold_after_overdue_lots") or 3),

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from vai_hold.domain.ai_complete import expected_complete, scan_settle_ready
 from vai_hold.domain.enums import (
@@ -33,14 +33,7 @@ from vai_hold.domain.models import (
 )
 from vai_hold.domain.ownership import is_smm_hold, match_our_holds
 from vai_hold.domain.retry import retry_wait_commands
-from vai_hold.domain.smm_memo import (
-    DEFAULT_TEMPLATE,
-    defect_slots,
-    format_smm_memo,
-    memo_needs_transfer,
-    merged_slots,
-)
-from vai_hold.domain.target import choose_hold_target, smm_hold_ope_no
+from vai_hold.domain.target import choose_hold_target
 
 
 @dataclass
@@ -66,6 +59,7 @@ class Snapshot:
     smm_hold_step: str = "DefaultHoldStep"
     smm_memo_template: str = "Please check {slots}"
     max_action_attempts: int = 3
+    scan_settle_minutes: int = 2
     now: datetime | None = None
 
 
@@ -165,18 +159,6 @@ def derive_state(snap: Snapshot) -> Decision:
                 reason="release_verifying" if still_querying else "release_sent",
                 hold_code=inflight.hold_code,
             )
-        if inflight.action_type == ActionType.TRANSFER_HOLD:
-            return Decision(
-                rule_id="A2-16",
-                work_state=order.work_state if order.work_state != WorkState.NEED_HOLD else WorkState.WAIT_AI,
-                protection_state=order.protection_state,
-                ai_state=order.ai_state,
-                business_action=BusinessAction.NONE,
-                reason="transfer_in_flight",
-                hold_code=inflight.hold_code,
-                memo=inflight.expected_postcondition,
-            )
-
     if snap.hold_query.status in (SourceStatus.UNKNOWN, SourceStatus.STALE):
         return Decision(
             rule_id="A2-14",
@@ -210,17 +192,6 @@ def derive_state(snap: Snapshot) -> Decision:
                 business_action=BusinessAction.SET_RELEASE,
                 reason="retry_same_action",
                 hold_code=cmd.hold_code,
-            )
-        if cmd.action_type == ActionType.TRANSFER_HOLD:
-            return Decision(
-                rule_id="A1-09",
-                work_state=WorkState.WAIT_AI,
-                protection_state=ProtectionState.CONFIRMED,
-                ai_state=order.ai_state,
-                business_action=BusinessAction.TRANSFER_HOLD,
-                reason="retry_same_action",
-                hold_code=cmd.hold_code,
-                memo=cmd.expected_postcondition,
             )
 
     mes_holds: list[HoldCommand] = []
@@ -301,15 +272,6 @@ def derive_state(snap: Snapshot) -> Decision:
                 reason="skip_default_hold_smm_present",
                 missing_wafers=missing,
             )
-        if ai_status == "COMPLETE_OK":
-            return Decision(
-                rule_id="A2-20",
-                work_state=WorkState.CLOSED,
-                protection_state=ProtectionState.NONE,
-                ai_state=AiState.COMPLETE_OK,
-                business_action=BusinessAction.NONE,
-                reason="skip_default_hold_smm_present_ai_ok",
-            )
         if ai_status == "INVALID":
             return Decision(
                 rule_id="A2-06",
@@ -320,13 +282,14 @@ def derive_state(snap: Snapshot) -> Decision:
                 reason="ai_result_invalid",
                 incidents=["AI_RESULT_INVALID"],
             )
+        # 現場已有 SMM Hold：不設 Default Hold。掃完即可結案（沒有本系統 Hold 可解）。
         return Decision(
-            rule_id="A2-08",
+            rule_id="A2-20",
             work_state=WorkState.CLOSED,
             protection_state=ProtectionState.NONE,
-            ai_state=AiState.COMPLETE_DEFECT,
+            ai_state=AiState.COMPLETE_OK if ai_status == "COMPLETE_OK" else AiState.COMPLETE_DEFECT,
             business_action=BusinessAction.NONE,
-            reason="skip_default_hold_smm_handoff",
+            reason="skip_default_hold_smm_present",
         )
 
     if own_holds:
@@ -342,26 +305,6 @@ def derive_state(snap: Snapshot) -> Decision:
         ai_status, missing = expected_complete(
             snap.expected_wafer_ids, snap.ai_views, rework_count=order.rework_count
         )
-        fv = snap.flow_query.value if snap.flow_query.status == SourceStatus.FOUND else None
-        # 接手：Default Hold 站上有 SMM Hold 即可（D04）
-        smm_ope = order.target_hold_ope_no
-        defect_holds = [
-            h
-            for h in mes_holds
-            if is_smm_hold(
-                h,
-                lot_id=order.lot_id,
-                hold_code=snap.smm_hold_code,
-                hold_user=snap.smm_hold_user,
-                ope_no=smm_ope,
-            )
-        ]
-        desired_slots = defect_slots(
-            snap.expected_wafer_ids, snap.ai_views, rework_count=order.rework_count
-        )
-        transfer = _smm_transfer_decision(snap, order, defect_holds, desired_slots)
-        if transfer is not None:
-            return transfer
         if ai_status in {"WAITING", "EMPTY"}:
             return Decision(
                 rule_id="A2-05",
@@ -383,36 +326,21 @@ def derive_state(snap: Snapshot) -> Decision:
                 missing_wafers=missing,
                 incidents=["AI_RESULT_INVALID"],
             )
-        if ai_status == "COMPLETE_OK":
-            return Decision(
-                rule_id="A2-07",
-                work_state=WorkState.READY_RELEASE_OK,
-                protection_state=ProtectionState.CONFIRMED,
-                ai_state=AiState.COMPLETE_OK,
-                business_action=BusinessAction.SET_RELEASE,
-                reason="ai_ok",
-            )
-        if defect_holds:
-            return Decision(
-                rule_id="A2-08",
-                work_state=WorkState.READY_RELEASE_HANDOFF,
-                protection_state=ProtectionState.CONFIRMED,
-                ai_state=AiState.COMPLETE_DEFECT,
-                business_action=BusinessAction.SET_RELEASE,
-                reason="defect_hold_handoff",
-            )
+        ai_state = AiState.COMPLETE_OK if ai_status == "COMPLETE_OK" else AiState.COMPLETE_DEFECT
         clock = snap.now or order.updated_at
+        settle = timedelta(minutes=max(0, int(snap.scan_settle_minutes)))
         if clock and scan_settle_ready(
             snap.expected_wafer_ids,
             snap.ai_views,
             rework_count=order.rework_count,
             now=clock,
+            settle=settle,
         ):
             return Decision(
                 rule_id="A2-21",
                 work_state=WorkState.READY_RELEASE_OK,
                 protection_state=ProtectionState.CONFIRMED,
-                ai_state=AiState.COMPLETE_DEFECT,
+                ai_state=ai_state,
                 business_action=BusinessAction.SET_RELEASE,
                 reason="scan_completed",
             )
@@ -420,9 +348,9 @@ def derive_state(snap: Snapshot) -> Decision:
             rule_id="A2-09",
             work_state=WorkState.WAIT_AI,
             protection_state=ProtectionState.CONFIRMED,
-            ai_state=AiState.COMPLETE_DEFECT,
+            ai_state=ai_state,
             business_action=BusinessAction.CHECK_AI,
-            reason="defect_scan_dwell",
+            reason="scan_dwell",
         )
 
     if confirmed_binding and not own_holds and not (
@@ -574,42 +502,6 @@ def derive_state(snap: Snapshot) -> Decision:
     )
 
 
-def _smm_transfer_decision(snap: Snapshot, order, defect_holds: list, desired_slots: list[int]) -> Decision | None:
-    if not defect_holds or not desired_slots:
-        return None
-    current = defect_holds[0]
-    if not memo_needs_transfer(current.memo, desired_slots):
-        return None
-    slots = merged_slots(current.memo, desired_slots)
-    memo = format_smm_memo(snap.smm_memo_template or DEFAULT_TEMPLATE, slots)
-    prior = [
-        c
-        for c in snap.commands
-        if c.action_type == ActionType.TRANSFER_HOLD and c.expected_postcondition == memo
-    ]
-    if any(c.action_state == ActionState.REJECTED for c in prior):
-        return Decision(
-            rule_id="A2-18",
-            work_state=WorkState.WAIT_AI,
-            protection_state=ProtectionState.CONFIRMED,
-            ai_state=order.ai_state,
-            business_action=BusinessAction.OPEN_INCIDENT,
-            reason="retry_exhausted",
-            incidents=["TRANSFER_FAILED"],
-            memo=memo,
-        )
-    return Decision(
-        rule_id="A2-16",
-        work_state=WorkState.WAIT_AI,
-        protection_state=ProtectionState.CONFIRMED,
-        ai_state=order.ai_state,
-        business_action=BusinessAction.TRANSFER_HOLD,
-        reason="smm_memo_transfer",
-        hold_code=current.hold_code,
-        memo=memo,
-    )
-
-
 def plan_action(decision: Decision, function_code: str) -> Decision:
     """Restrict action to what this pipeline is allowed to execute."""
     from vai_hold.domain.enums import FunctionCode
@@ -630,7 +522,6 @@ def plan_action(decision: Decision, function_code: str) -> Decision:
         FunctionCode.CHECK_AI: {
             BusinessAction.CHECK_AI,
             BusinessAction.SET_RELEASE,
-            BusinessAction.TRANSFER_HOLD,
             BusinessAction.OPEN_INCIDENT,
             BusinessAction.NONE,
         },

@@ -27,6 +27,12 @@ class Harness:
     def check_ai(self):
         return self.app.run(FunctionCode.CHECK_AI.value)
 
+    def settle(self):
+        """Advance past release.scan_settle_minutes after all wafers scanned."""
+        minutes = int(getattr(self.settings, "scan_settle_minutes", 2) or 0)
+        if minutes:
+            self.clock.advance(minutes=minutes)
+
     def confirm_release(self):
         return self.app.run(FunctionCode.CONFIRM_RELEASE.value)
 

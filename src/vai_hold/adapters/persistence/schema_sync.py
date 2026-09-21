@@ -83,19 +83,38 @@ def parse_uniques(sql: str) -> dict[str, set[tuple[str, ...]]]:
     return found
 
 
+# SQLite 彩排才有：正式 Oracle 用現場 MV_NXT_PARAM_BT，不建 agent_control。
+SQLITE_ONLY_TABLES = frozenset({"agent_control"})
+# 正式 Oracle 表名 → SQLite 短名（比欄位時對齊）
+ORACLE_TO_SQLITE_TABLE = {
+    "mv_nxt_def_hold_order_bt": "hold_order",
+    "mv_nxt_def_hold_incident_bt": "incident",
+}
+
+
+def _sqlite_table_name(oracle_or_sqlite: str) -> str:
+    return ORACLE_TO_SQLITE_TABLE.get(oracle_or_sqlite, oracle_or_sqlite)
+
+
 def dual_ddl_diffs(sqlite_sql: str | None = None, oracle_sql: str | None = None) -> list[str]:
     sqlite_sql = sqlite_sql if sqlite_sql is not None else SQLITE_SCHEMA.read_text(encoding="utf-8")
     oracle_sql = oracle_sql if oracle_sql is not None else ORACLE_SCHEMA.read_text(encoding="utf-8")
     s_cols = parse_columns(sqlite_sql)
-    o_cols = parse_columns(oracle_sql)
+    o_raw = parse_columns(oracle_sql)
+    o_cols = {_sqlite_table_name(k): v for k, v in o_raw.items()}
     diffs: list[str] = []
-    if set(s_cols) != set(o_cols):
-        diffs.append(f"tables sqlite-only={sorted(set(s_cols) - set(o_cols))} oracle-only={sorted(set(o_cols) - set(s_cols))}")
+    s_tables = set(s_cols) - SQLITE_ONLY_TABLES
+    o_tables = set(o_cols)
+    if s_tables != o_tables:
+        diffs.append(f"tables sqlite-only={sorted(s_tables - o_tables)} oracle-only={sorted(o_tables - s_tables)}")
     for table in sorted(set(s_cols) & set(o_cols)):
         if s_cols[table] != o_cols[table]:
             diffs.append(f"{table} columns sqlite={s_cols[table]} oracle={o_cols[table]}")
-    s_idx = parse_indexes(sqlite_sql)
-    o_idx = parse_indexes(oracle_sql)
+    s_idx = {k: v for k, v in parse_indexes(sqlite_sql).items() if v[0] not in SQLITE_ONLY_TABLES}
+    o_idx = {
+        k: (_sqlite_table_name(tbl), kind, cols)
+        for k, (tbl, kind, cols) in parse_indexes(oracle_sql).items()
+    }
     if set(s_idx) != set(o_idx):
         diffs.append(
             f"indexes sqlite-only={sorted(set(s_idx) - set(o_idx))} oracle-only={sorted(set(o_idx) - set(s_idx))}"
@@ -103,8 +122,8 @@ def dual_ddl_diffs(sqlite_sql: str | None = None, oracle_sql: str | None = None)
     for name in sorted(set(s_idx) & set(o_idx)):
         if s_idx[name] != o_idx[name]:
             diffs.append(f"index {name} sqlite={s_idx[name]} oracle={o_idx[name]}")
-    s_uq = parse_uniques(sqlite_sql)
-    o_uq = parse_uniques(oracle_sql)
+    s_uq = {k: v for k, v in parse_uniques(sqlite_sql).items() if k not in SQLITE_ONLY_TABLES}
+    o_uq = {_sqlite_table_name(k): v for k, v in parse_uniques(oracle_sql).items()}
     for table in sorted(set(s_uq) | set(o_uq)):
         if s_uq.get(table, set()) != o_uq.get(table, set()):
             diffs.append(f"{table} unique sqlite={sorted(s_uq.get(table, set()))} oracle={sorted(o_uq.get(table, set()))}")
@@ -140,11 +159,10 @@ SELECT
     o.lot_id,
     w.wafer_id,
     w.ai_result,
-    w.scan_completed_at,
-    w.missing_alarm_type
+    w.scan_completed_at
 FROM order_wafer w
 JOIN hold_order o ON o.order_id = w.order_id
-WHERE w.missing_alarm_type = 1 OR w.ai_result = 'DEFECT'
+WHERE w.ai_result = 'DEFECT'
 ORDER BY o.lot_id, w.wafer_id;
 
 CREATE VIEW IF NOT EXISTS v_open_incidents AS

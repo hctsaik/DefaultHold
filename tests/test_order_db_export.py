@@ -53,16 +53,12 @@ def test_export_order_sqlite_has_c09_error_and_dot_slot(tmp_path):
     ids = [r["wafer_id"] for r in wafers]
     assert ids == ["A123456.01", "A123456.02", "A123456.03"]
     assert [wafer_number(w) for w in ids] == [1, 2, 3]
-    flags = conn.execute(
-        "SELECT wafer_id FROM order_wafer WHERE missing_alarm_type=1"
-    ).fetchall()
-    assert [r["wafer_id"] for r in flags] == ["A123457.03"]
     closed = conn.execute(
         "SELECT lot_id, close_reason FROM hold_order WHERE lifecycle='CLOSED' ORDER BY lot_id"
     ).fetchall()
     reasons = {r["lot_id"]: r["close_reason"] for r in closed}
-    assert reasons["A123459"] == "AI_OK"
-    assert reasons["A123460"] == "TRANSFERRED"
+    assert reasons["A123459"] == "SCAN_COMPLETED"
+    assert reasons["A123460"] == "SCAN_COMPLETED"
     manual = conn.execute(
         "SELECT close_reason FROM hold_order WHERE lot_id='A123461'"
     ).fetchone()

@@ -16,9 +16,8 @@ from vai_hold.application.services import (
     touch_heartbeat,
 )
 from vai_hold.application.usecases.request_release import request_release
-from vai_hold.application.usecases.request_transfer import request_transfer, verify_transfer
 from vai_hold.domain.derive import derive_state, plan_action
-from vai_hold.domain.enums import ActionType, BusinessAction, FunctionCode, WorkState
+from vai_hold.domain.enums import BusinessAction, FunctionCode, WorkState
 
 if TYPE_CHECKING:
     from vai_hold.application.engine import App, RunResult
@@ -35,33 +34,17 @@ def run(app: App, params: dict) -> RunResult:
         for order in iter_scoped_open_orders(app, uow, int(params.get("limit") or 500)):
             now = app.clock.now()
             snap = snapshot(app, uow, order, persist_ai=True)
-            if snap.in_flight and snap.in_flight.action_type == ActionType.TRANSFER_HOLD:
-                verify_transfer(app, uow, order, snap, now)
-                snap = snapshot(app, uow, order, persist_ai=True)
             decision = plan_action(derive_state(snap), FN)
             emit_decision(
                 FN, snap, decision, order, rec_time=now, observation_phase="before_action"
             )
-            if decision.business_action in {
-                BusinessAction.TRANSFER_HOLD,
-                BusinessAction.SET_RELEASE,
-            }:
+            if decision.business_action == BusinessAction.SET_RELEASE:
                 claimed = claim_order(app, uow, order, now)
                 if claimed is None:
                     continue
                 order = claimed
                 snap = snapshot(app, uow, order, persist_ai=True)
                 decision = plan_action(derive_state(snap), FN)
-            if decision.business_action == BusinessAction.TRANSFER_HOLD:
-                if request_transfer(app, uow, order, snap, decision, now):
-                    snap = snapshot(app, uow, order, persist_ai=True)
-                persist_projection(uow, order, decision, now)
-                emit_decision(
-                    FN, snap, decision, order, rec_time=now, force=True, observation_phase="after_write"
-                )
-                maybe_resolve_order_incidents(app, uow, order, snap, now)
-                result.processed += 1
-                continue
             if decision.business_action == BusinessAction.SET_RELEASE:
                 sent = request_release(app, uow, order, snap, decision, now)
                 if sent:

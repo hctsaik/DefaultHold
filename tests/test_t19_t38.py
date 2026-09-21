@@ -99,6 +99,7 @@ def test_t28_disable_blocks_new_allows_release(h):
         uow.control.save(c, c.control_version)
         uow.commit()
     h.world.complete_ai("LOT1")
+    h.settle()
     h.check_ai()
     h.confirm_release()
     assert h.order().lifecycle == Lifecycle.CLOSED

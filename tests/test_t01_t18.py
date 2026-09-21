@@ -13,18 +13,23 @@ def _happy_until_hold(h: Harness, lot="LOT1", wafers=25):
     return h.order(lot)
 
 
+def _complete_and_settle(h: Harness, lot="LOT1", **kwargs):
+    h.world.complete_ai(lot, **kwargs)
+    h.settle()
+
+
 def test_t01_happy_path_25_ok(h: Harness):
     order = _happy_until_hold(h)
     assert order.work_state == WorkState.WAIT_AI
     assert order.protection_state == ProtectionState.CONFIRMED
-    h.world.complete_ai("LOT1")
+    _complete_and_settle(h)
     h.check_ai()
     order = h.order()
     assert order.work_state == WorkState.RELEASE_SENT
     h.confirm_release()
     order = h.order()
     assert order.lifecycle == Lifecycle.CLOSED
-    assert order.close_reason == "AI_OK"
+    assert order.close_reason == "SCAN_COMPLETED"
     assert h.world.release_calls
     assert all(c.memo != h.settings.hold_memo for c in h.world.release_calls)
     # did not close without verify
@@ -164,13 +169,33 @@ def test_t11_empty_roster(h: Harness):
 
 def test_t12_completed_without_result(h: Harness):
     _happy_until_hold(h)
-    h.world.complete_ai("LOT1", missing_result="W03")
+    _complete_and_settle(h, missing_result="W03")
     h.check_ai()
     assert h.order().work_state == WorkState.RELEASE_SENT
     assert h.world.release_calls
-    with h.app.uow_factory.new() as uow:
-        flags = [w for w in uow.wafers.list_by_order(h.order().order_id) if w.missing_alarm_type]
-    assert [w.wafer_id for w in flags] == ["W03"]
+
+
+def test_all_ok_before_settle_does_not_release(h: Harness):
+    _happy_until_hold(h)
+    h.world.complete_ai("LOT1")
+    h.check_ai()
+    order = h.order()
+    assert order.work_state == WorkState.WAIT_AI
+    assert order.last_rule_id == "A2-09"
+    assert not h.world.release_calls
+
+
+def test_scan_settle_minutes_from_config():
+    h = make_harness(extra_overrides={"release": {"scan_settle_minutes": 1}})
+    _happy_until_hold(h)
+    h.world.complete_ai("LOT1")
+    h.check_ai()
+    assert h.order().work_state == WorkState.WAIT_AI
+    assert not h.world.release_calls
+    h.clock.advance(minutes=1)
+    h.check_ai()
+    assert h.order().work_state == WorkState.RELEASE_SENT
+    assert h.world.release_calls
 
 
 def test_defect_no_smm_before_two_minutes_does_not_release(h: Harness):
@@ -258,9 +283,11 @@ def test_next_process_step_smm_hold_is_after_current_not_after_default_hold():
     h.confirm_hold()
     h.world.complete_ai("LOT1", result="DEFECT")
     h.world.add_defect_hold("LOT1", ope_no="OP150")
+    h.settle()
     h.check_ai()
-    # D04：只有 Default Hold 站（OP200）的 SMM Hold 算接手
-    assert h.order().work_state == WorkState.WAIT_AI
+    # 解 Default Hold 不看 SMM 在哪一站；掃完 + settle 就解
+    assert h.order().work_state == WorkState.RELEASE_SENT
+    assert h.world.release_calls
 
 
 def test_next_process_step_does_not_treat_hold_after_default_hold_as_smm():
@@ -278,11 +305,13 @@ def test_next_process_step_does_not_treat_hold_after_default_hold_as_smm():
     h.confirm_hold()
     h.world.complete_ai("LOT1", result="DEFECT")
     h.world.add_defect_hold("LOT1", ope_no="OP500")
+    h.settle()
     h.check_ai()
-    assert h.order().work_state == WorkState.WAIT_AI
+    assert h.order().work_state == WorkState.RELEASE_SENT
+    assert h.world.release_calls
 
 
-def test_wafer_based_smm_memo_transfer_accumulates_slots(h: Harness):
+def test_agent_does_not_transfer_smm_hold_memo(h: Harness):
     from vai_hold.domain.smm_memo import mes_wafer_id
 
     lot = "A123456"
@@ -293,15 +322,11 @@ def test_wafer_based_smm_memo_transfer_accumulates_slots(h: Harness):
     h.world.scan_wafer(lot, wafers[0], result="DEFECT")
     h.world.add_defect_hold(lot, memo="Please check #1")
     h.check_ai()
-    assert h.order(lot).work_state == WorkState.WAIT_AI
-    assert h.world.transfer_calls == []
     h.world.scan_wafer(lot, wafers[1], result="DEFECT")
     h.check_ai()
-    assert h.world.transfer_calls
+    assert h.world.transfer_calls == []
     smm = [x for x in h.world.holds if x.hold_code == "SMMH"]
-    assert smm and smm[0].memo == "Please check #1,#2"
-    h.check_ai()
-    assert smm[0].memo == "Please check #1,#2"
+    assert smm and smm[0].memo == "Please check #1"
     assert h.order(lot).work_state == WorkState.WAIT_AI
     assert not h.world.release_calls
 
@@ -348,15 +373,15 @@ def test_timeout_not_found_retries_then_stops(h: Harness):
     assert h.order().work_state == WorkState.HOLD_FAILED
 
 
-def test_t14_defect_handoff_only_releases_preventive(h: Harness):
+def test_t14_defect_does_not_release_smm_hold(h: Harness):
     _happy_until_hold(h)
-    h.world.complete_ai("LOT1", result="DEFECT")
+    _complete_and_settle(h, result="DEFECT")
     h.world.add_defect_hold("LOT1")
     defect_before = [x for x in h.world.holds if x.hold_user == "AOA"]
     h.check_ai()
     h.confirm_release()
     assert h.order().lifecycle == Lifecycle.CLOSED
-    assert h.order().close_reason == "TRANSFERRED"
+    assert h.order().close_reason == "SCAN_COMPLETED"
     assert any(x.hold_user == "AOA" and x.hold_code == "SMMH" for x in h.world.holds)
     assert len([x for x in h.world.holds if x.hold_user == "AOA"]) == len(defect_before)
 
@@ -371,7 +396,7 @@ def test_t15_defect_without_formal_hold(h: Harness):
 
 def test_t16_release_timeout_then_closed(h: Harness):
     _happy_until_hold(h)
-    h.world.complete_ai("LOT1")
+    _complete_and_settle(h)
     h.world.release_response["LOT1"] = "timeout"
     h.check_ai()
     assert h.order().work_state == WorkState.RELEASE_SENT
@@ -383,7 +408,7 @@ def test_t16_release_timeout_then_closed(h: Harness):
 
 def test_t17_release_rejected_hold_remains(h: Harness):
     _happy_until_hold(h)
-    h.world.complete_ai("LOT1")
+    _complete_and_settle(h)
     h.world.release_response["LOT1"] = "rejected_permission"
     h.check_ai()
     h.confirm_release()

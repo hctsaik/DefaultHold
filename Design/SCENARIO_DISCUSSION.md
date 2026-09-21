@@ -283,7 +283,7 @@ T24 已確認「Hold 已確認就不重選、不重送」，不應重新把這�
 | D12 | 現在 catalog／pytest 只做 **offline 邏輯**；實際上線再用程式對 MES 確認。通過 ≠ 真實 MES 已驗證。 | | 總覽加註 |
 | T25 | **MES 一定能準確回答有沒有 Hold**，UNKNOWN／問不到 **不用考慮**。 | 程式仍可防呆，但不當驗收 | 不適用 |
 | T06 | MES 上 Hold 還在時，下一輪 **CONFIRM 會再對上並確認成功**，不會重送。規格「DB 回寫前中斷」與「重跑不重送」同一結果：以 MES 為準再查一次。 | | T06.html |
-| C09 | 掃完有 Defect、沒 SMM Hold：等 `Max(ScanCompletedTime) >= 2 分鐘` 再解 Default Hold。結案原因 `SCAN_COMPLETED`。不留 data_error／告警。全 OK 或已有 SMM Hold 立刻解。 | 保護空窗另一隻程式處理 | C09.html |
+| C09 | 全部掃完（OK／NG 同一條）：等 `Max(ScanCompletedTime) >= release.scan_settle_minutes` 再解 Default Hold。結案原因一律 `SCAN_COMPLETED`。不看、不設、不改 SMM Hold。進站時現場已有 SMM Hold 仍跳過不設 Default Hold（D04）。 | settle 分鐘在 config | C04.html、C09.html |
 | 人工結案 | 現場沒有結案 GUI。**Hold 解掉就當結案**（`MANUAL_CLOSED`／`close_reason=MANUAL`）。 | Hold 還在則不走這條 | C08 |
 | 防無限寫 | 狀態沒變就不 UPDATE Order、不重印 `eval.cycle`／`incident.opened`、不累加 incident count。SET 只處理 `NEED_HOLD`／`NEED_TARGET`／`NEED_BACKUP_HOLD`。 | Cron 心跳 `discovery_cursor` 仍每輪一筆（不是每張單） | tests/test_order_db_export.py |
 | 多台 | **正式會有多台同時跑**。改單／送 MES 前必須搶到 claim；別人租約還沒到期就不能搶。 | 不是靠 Cron 錯開一分鐘 | try_claim + claim_order |

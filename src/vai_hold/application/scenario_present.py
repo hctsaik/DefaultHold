@@ -20,7 +20,7 @@ RUN = {
         "kind": "act",
     },
     "check": {
-        "title": "查 AI 是否掃完；必要時解除或改 Memo",
+        "title": "查 AI 是否掃完",
         "loc": "pipelines/check_ai.py:run",
         "via": "domain/derive.py:derive_state",
         "mes": "AiPort.read_results / HoldPort",
@@ -120,12 +120,11 @@ def describe_step(step: dict[str, Any]) -> dict[str, str]:
             "kind": "env",
         }
     if op == "add_defect_hold":
-        memo = step.get("memo") or "SMMH/AOA"
         return {
-            "title": "MES 出現 SMM Hold（SMMH／AOA）",
+            "title": "MES 上另有一筆 Hold（不是本系統 Default Hold）",
             "loc": "HoldPort.list_holds",
             "via": "application/services.py:snapshot",
-            "mes": memo if memo.startswith("Please check") else "",
+            "mes": "",
             "kind": "env",
         }
     if op == "add_foreign_hold":

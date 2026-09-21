@@ -106,7 +106,7 @@ def _write_readme(db: Path, md: Path) -> None:
     conn.row_factory = sqlite3.Row
     orders = conn.execute("SELECT * FROM v_order_overview").fetchall()
     wafers = conn.execute(
-        "SELECT o.lot_id, w.wafer_id, w.ai_result, w.missing_alarm_type "
+        "SELECT o.lot_id, w.wafer_id, w.ai_result "
         "FROM order_wafer w JOIN hold_order o ON o.order_id=w.order_id "
         "ORDER BY o.lot_id, w.wafer_id"
     ).fetchall()
@@ -136,7 +136,6 @@ def _write_readme(db: Path, md: Path) -> None:
             r["wafer_id"],
             str(wafer_number(r["wafer_id"]) or ""),
             r["ai_result"] or "",
-            "1" if r["missing_alarm_type"] else "0",
         ]
         for r in wafers
     ]
@@ -153,11 +152,11 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 | Lot | 故事 | 你該看到 |
 |---|---|---|
-| A123456 | C09 掃完 Defect、無 SMM Hold、已滿 2 分鐘 | 申請解除；`close_reason=SCAN_COMPLETED` |
-| A123457 | T12 `.03` 有掃完時間、沒 Alarm Type | 當掃完；`order_wafer.missing_alarm_type=1` |
+| A123456 | C09 掃完 Defect、已滿 settle | 申請解除；`close_reason=SCAN_COMPLETED` |
+| A123457 | T12 `.03` 有 ScanCompletedTime | 當掃完；滿 settle 可解 |
 | A123458 | C03 還缺一片 | `WAIT_AI`，沒 Release |
-| A123459 | 全 OK | `CLOSED` / `AI_OK` |
-| A123460 | Defect + SMM Hold | `CLOSED` / `TRANSFERRED` |
+| A123459 | 全 OK 且滿 settle | `CLOSED` / `SCAN_COMPLETED` |
+| A123460 | Defect + 現場 SMM Hold | `CLOSED` / `SCAN_COMPLETED`；SMM Hold 未動 |
 | A123461 | 線上把 Default Hold 解掉 | `MANUAL_CLOSED`（沒有結案 GUI，Hold 沒了就結案） |
 
 ## hold_order
@@ -166,7 +165,7 @@ Wafer id 是現場格式 `A123456.01`；片號是小數點後面的 `01` → mem
 
 ## order_wafer（含 parse 出的片號）
 
-{tbl(["lot_id", "wafer_id", "slot#", "ai_result", "missing_alarm_type"], wafer_rows)}
+{tbl(["lot_id", "wafer_id", "slot#", "ai_result"], wafer_rows)}
 
 ## 還開著的 incident
 
@@ -179,7 +178,7 @@ SELECT lot_id, work_state, data_error, lifecycle, close_reason FROM v_order_over
 SELECT * FROM v_order_errors;
 SELECT * FROM v_wafer_flags;
 SELECT * FROM v_open_incidents;
-SELECT lot_id, wafer_id, ai_result, missing_alarm_type FROM order_wafer ORDER BY lot_id, wafer_id;
+SELECT lot_id, wafer_id, ai_result, scan_completed_at FROM order_wafer ORDER BY lot_id, wafer_id;
 ```
 """,
         encoding="utf-8",

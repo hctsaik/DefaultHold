@@ -18,14 +18,14 @@
 | **C01** | Lot 進站，還沒本系統 Hold | SET | `HOLD_VERIFY_PENDING` |
 | **C02** | C01 已送出 | CONFIRM | `WAIT_AI`／CONFIRMED |
 | **C03** | 已設 Default Hold，SMM 未齊 | CHECK | 仍 `WAIT_AI` |
-| **C04** | 所有 Wafer 判斷完 SMM 且 OK | CHECK | `RELEASE_SENT` |
+| **C04** | 所有 Wafer 已掃完且滿 settle 分鐘（OK／NG 同一條） | CHECK | `RELEASE_SENT`；`close_reason=SCAN_COMPLETED` |
 | **C05** | 已送解除，MES 可能 Delay | CONFIRM_RELEASE | `RELEASE_VERIFY_PENDING` |
-| **C06** | 自己的 Hold 沒了 | CONFIRM_RELEASE | `CLOSED`／AI_OK |
+| **C06** | 自己的 Hold 沒了 | CONFIRM_RELEASE | `CLOSED`／SCAN_COMPLETED |
 | **C07** | ENHL 衝突 | SET OTHL | 已送 OTHL |
 | **C08** | 線上代解 | CONFIRM | `LINE_RELEASED` |
-| **C09** | Defect 無 SMM Hold，掃完已滿 2 分鐘 | CHECK | 申請解除 Default Hold；`close_reason=SCAN_COMPLETED`；不留 data_error／告警 |
-| **C10** | 有 SMM Hold | CHECK | `RELEASE_SENT` |
-| **C11** | 交接後確認解除 | CONFIRM_RELEASE | `CLOSED`；SMM Hold 仍在 |
+| **C09** | Defect，掃完已滿 settle 分鐘 | CHECK | 申請解除 Default Hold；`close_reason=SCAN_COMPLETED`；不留 data_error／告警 |
+| **C10** | Defect 掃完且滿 settle 分鐘 | CHECK | `RELEASE_SENT`；`close_reason=SCAN_COMPLETED` |
+| **C11** | 自己的 Hold 沒了（Defect 路徑） | CONFIRM_RELEASE | `CLOSED`／SCAN_COMPLETED |
 
 原來的 **T01** 只保留當「四格串起來的走完證明」，不當唯一驗收單位。
 

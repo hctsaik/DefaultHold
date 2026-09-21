@@ -10,6 +10,6 @@
 | [`hold_unknown_no_resend.md`](hold_unknown_no_resend.md) | Hold 查詢仍 UNKNOWN：不准重送 |
 | [`release_retry_transient.md`](release_retry_transient.md) | SET_RELEASE 暫時拒絕：同一命令最多 3 次 |
 | [`release_retry_timeout.md`](release_retry_timeout.md) | SET_RELEASE timeout：先查驗再重送，最多 3 次 |
-| [`transfer_memo_accumulate.md`](transfer_memo_accumulate.md) | Wafer-based：Please check #1 → transferHold #1,#2 |
-| [`transfer_retry_transient.md`](transfer_retry_transient.md) | transferHold 暫時拒絕：同一命令最多 3 次 |
-| [`t14_defect_handoff.md`](t14_defect_handoff.md) | Defect + 正式 SmmHold → 只解 Default Hold |
+| [`transfer_memo_accumulate.md`](transfer_memo_accumulate.md) | 未掃完：本 Agent 不改 SMM Memo |
+| [`transfer_retry_transient.md`](transfer_retry_transient.md) | 本 Agent 不送 transferHold |
+| [`t14_defect_handoff.md`](t14_defect_handoff.md) | Defect + 現場 SMM Hold → 只解 Default Hold |

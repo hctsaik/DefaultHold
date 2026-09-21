@@ -126,22 +126,18 @@ def _order_from_row(r: sqlite3.Row) -> HoldOrder:
         ai_state=AiState(r["ai_state"]),
         work_state=WorkState(r["work_state"]),
         site_id=r["site_id"],
-        visit_id=r["visit_id"],
         current_ope_no=r["current_operation_id"],
         target_hold_ope_no=r["target_hold_operation_id"],
         future_hold_ope_name=r["future_hold_ope_name"] if "future_hold_ope_name" in r.keys() else None,
         hold_route_id=r["hold_route_id"],
-        target_occurrence=r["target_occurrence"],
         target_reason=r["target_reason"],
         tool_id=r["tool_id"],
         flow_version=r["flow_version"],
         config_version=r["config_version"],
-        manifest_version=r["manifest_version"],
         last_rule_id=r["last_rule_id"],
         state_reason=r["state_reason"],
         close_reason=r["close_reason"],
         data_error=r["data_error"] if "data_error" in r.keys() else None,
-        last_snapshot_ref=r["last_snapshot_ref"],
         row_version=r["row_version"],
         next_check_at=parse_iso(r["next_check_at"]),
         manual_control=ManualControl(r["manual_control"] or "NONE"),
@@ -173,21 +169,21 @@ class _Orders:
         try:
             self._u.conn.execute(
                 """INSERT INTO hold_order (
-                    order_id, site_id, lot_id, origin_operation_id, rework_count, visit_id,
-                    current_operation_id, target_hold_operation_id, future_hold_ope_name, hold_route_id, target_occurrence,
+                    order_id, site_id, lot_id, origin_operation_id, rework_count,
+                    current_operation_id, target_hold_operation_id, future_hold_ope_name, hold_route_id,
                     target_reason, tool_id, flow_version, config_version, policy_version,
-                    manifest_version, lifecycle, protection_state, ai_state, work_state,
-                    last_rule_id, state_reason, close_reason, data_error, last_snapshot_ref, row_version,
+                    lifecycle, protection_state, ai_state, work_state,
+                    last_rule_id, state_reason, close_reason, data_error, row_version,
                     next_check_at, manual_control, claim_owner, claim_until, created_at, updated_at,
                     operation_start_at, last_evaluated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    o.order_id, o.site_id, o.lot_id, o.origin_ope_no, o.rework_count, o.visit_id,
-                    o.current_ope_no, o.target_hold_ope_no, o.future_hold_ope_name, o.hold_route_id, o.target_occurrence,
+                    o.order_id, o.site_id, o.lot_id, o.origin_ope_no, o.rework_count,
+                    o.current_ope_no, o.target_hold_ope_no, o.future_hold_ope_name, o.hold_route_id,
                     o.target_reason, o.tool_id, o.flow_version, o.config_version, o.policy_version,
-                    o.manifest_version, _e(o.lifecycle), _e(o.protection_state), _e(o.ai_state),
+                    _e(o.lifecycle), _e(o.protection_state), _e(o.ai_state),
                     _e(o.work_state), o.last_rule_id, o.state_reason, o.close_reason, o.data_error,
-                    o.last_snapshot_ref, o.row_version, _t(o.next_check_at), _e(o.manual_control),
+                    o.row_version, _t(o.next_check_at), _e(o.manual_control),
                     o.claim_owner, _t(o.claim_until), _t(o.created_at), _t(o.updated_at),
                     _t(o.operation_start_at), _t(o.last_evaluated_at),
                 ),
@@ -205,18 +201,18 @@ class _Orders:
         self._u.conn.execute(
             """UPDATE hold_order SET
                 current_operation_id=?, target_hold_operation_id=?, future_hold_ope_name=?, hold_route_id=?,
-                target_occurrence=?, target_reason=?, tool_id=?, flow_version=?, config_version=?,
-                policy_version=?, manifest_version=?, lifecycle=?, protection_state=?, ai_state=?,
-                work_state=?, last_rule_id=?, state_reason=?, close_reason=?, data_error=?, last_snapshot_ref=?,
+                target_reason=?, tool_id=?, flow_version=?, config_version=?,
+                policy_version=?, lifecycle=?, protection_state=?, ai_state=?,
+                work_state=?, last_rule_id=?, state_reason=?, close_reason=?, data_error=?,
                 row_version=?, next_check_at=?, manual_control=?, claim_owner=?, claim_until=?,
                 updated_at=?, last_evaluated_at=?, operation_start_at=?
                 WHERE order_id=? AND row_version=?""",
             (
-                o.current_ope_no, o.target_hold_ope_no, o.future_hold_ope_name, o.hold_route_id, o.target_occurrence,
+                o.current_ope_no, o.target_hold_ope_no, o.future_hold_ope_name, o.hold_route_id,
                 o.target_reason, o.tool_id, o.flow_version, o.config_version, o.policy_version,
-                o.manifest_version, _e(o.lifecycle), _e(o.protection_state), _e(o.ai_state),
+                _e(o.lifecycle), _e(o.protection_state), _e(o.ai_state),
                 _e(o.work_state), o.last_rule_id, o.state_reason, o.close_reason, o.data_error,
-                o.last_snapshot_ref, o.row_version, _t(o.next_check_at), _e(o.manual_control),
+                o.row_version, _t(o.next_check_at), _e(o.manual_control),
                 o.claim_owner, _t(o.claim_until), _t(o.updated_at), _t(o.last_evaluated_at),
                 _t(o.operation_start_at),
                 o.order_id, expected_version,
@@ -284,14 +280,13 @@ class _Wafers:
 
     def _insert(self, w: OrderWafer) -> None:
         self._u.conn.execute(
-            """INSERT INTO order_wafer (order_id, wafer_id, roster_version, operation_start_at,
-                operation_complete_at, scan_completed_at, ai_result, defect_types, result_version,
-                required_tasks, missing_alarm_type, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO order_wafer (order_id, wafer_id, roster_version,
+                scan_completed_at, ai_result, defect_types, result_version, updated_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
             (
-                w.order_id, w.wafer_id, w.roster_version, _t(w.operation_start_at),
-                _t(w.operation_complete_at), _t(w.scan_completed_at), w.ai_result,
-                w.defect_types, w.result_version, w.required_tasks,
-                1 if w.missing_alarm_type else 0, _t(w.updated_at),
+                w.order_id, w.wafer_id, w.roster_version,
+                _t(w.scan_completed_at), w.ai_result,
+                w.defect_types, w.result_version, _t(w.updated_at),
             ),
         )
 
@@ -305,14 +300,10 @@ class _Wafers:
                 wafer_id=r["wafer_id"],
                 roster_version=r["roster_version"],
                 updated_at=parse_iso(r["updated_at"]) or datetime.min,
-                operation_start_at=parse_iso(r["operation_start_at"]),
-                operation_complete_at=parse_iso(r["operation_complete_at"]),
                 scan_completed_at=parse_iso(r["scan_completed_at"]),
                 ai_result=r["ai_result"],
                 defect_types=r["defect_types"],
                 result_version=r["result_version"],
-                required_tasks=r["required_tasks"],
-                missing_alarm_type=bool(r["missing_alarm_type"]) if "missing_alarm_type" in r.keys() else False,
             )
             for r in rows
         ]
@@ -325,11 +316,11 @@ class _Wafers:
         if existing:
             self._u.conn.execute(
                 """UPDATE order_wafer SET scan_completed_at=?, ai_result=?, defect_types=?,
-                    result_version=?, roster_version=?, missing_alarm_type=?, updated_at=?
+                    result_version=?, roster_version=?, updated_at=?
                     WHERE order_id=? AND wafer_id=?""",
                 (
                     _t(row.scan_completed_at), row.ai_result, row.defect_types, row.result_version,
-                    row.roster_version, 1 if row.missing_alarm_type else 0, _t(row.updated_at),
+                    row.roster_version, _t(row.updated_at),
                     row.order_id, row.wafer_id,
                 ),
             )
@@ -341,86 +332,85 @@ class _Bindings:
     def __init__(self, uow: SqliteUnitOfWork) -> None:
         self._u = uow
 
-    def add(self, b: HoldBinding) -> None:
+    def _write(self, b: HoldBinding) -> None:
+        if not b.order_id:
+            return
         self._u.conn.execute(
-            """INSERT INTO hold_binding (
-                binding_id, order_id, role, generation, mes_hold_record_id, lot_id, route_id, ope_no,
-                hold_code, hold_user, hold_memo, hold_token, target_step_occurrence, hold_kind,
-                status, time_quality, requested_at, provider_created_at, first_confirmed_at,
-                effective_at, release_requested_at, released_at, release_verified_at, created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """UPDATE hold_order SET
+                dh_binding_id=?, dh_code=?, dh_user=?, dh_memo=?, dh_status=?, dh_generation=?,
+                dh_kind=?, dh_time_quality=?, dh_requested_at=?, dh_first_confirmed_at=?,
+                dh_release_requested_at=?, dh_released_at=?,
+                hold_route_id=COALESCE(?, hold_route_id),
+                target_hold_operation_id=COALESCE(?, target_hold_operation_id)
+                WHERE order_id=?""",
             (
-                b.binding_id, b.order_id, _e(b.role), b.generation, b.mes_hold_record_id, b.lot_id,
-                b.route_id, b.ope_no, b.hold_code, b.hold_user, b.hold_memo, b.hold_token,
-                b.target_step_occurrence, _e(b.hold_kind), _e(b.status), b.time_quality,
-                _t(b.requested_at), _t(b.provider_created_at), _t(b.first_confirmed_at),
-                _t(b.effective_at), _t(b.release_requested_at), _t(b.released_at),
-                _t(b.release_verified_at), _t(b.created_at), _t(b.updated_at),
+                b.binding_id, b.hold_code, b.hold_user, b.hold_memo, _e(b.status), b.generation,
+                _e(b.hold_kind), b.time_quality, _t(b.requested_at), _t(b.first_confirmed_at),
+                _t(b.release_requested_at), _t(b.released_at),
+                b.route_id, b.ope_no, b.order_id,
             ),
         )
+
+    def add(self, b: HoldBinding) -> None:
+        self._write(b)
 
     def update(self, b: HoldBinding) -> None:
-        self._u.conn.execute(
-            """UPDATE hold_binding SET status=?, hold_kind=?, first_confirmed_at=?, effective_at=?,
-                release_requested_at=?, released_at=?, release_verified_at=?, updated_at=?
-                WHERE binding_id=?""",
-            (
-                _e(b.status), _e(b.hold_kind), _t(b.first_confirmed_at), _t(b.effective_at),
-                _t(b.release_requested_at), _t(b.released_at), _t(b.release_verified_at),
-                _t(b.updated_at), b.binding_id,
-            ),
-        )
+        self._write(b)
 
-    def _from(self, r) -> HoldBinding:
+    def _from(self, r) -> HoldBinding | None:
+        if not r["dh_status"]:
+            return None
         return HoldBinding(
-            binding_id=r["binding_id"],
+            binding_id=r["dh_binding_id"] or r["order_id"],
             lot_id=r["lot_id"],
-            route_id=r["route_id"],
-            ope_no=r["ope_no"],
-            hold_code=r["hold_code"],
-            hold_user=r["hold_user"],
-            hold_memo=r["hold_memo"],
-            role=BindingRole(r["role"]),
-            status=BindingStatus(r["status"]),
+            route_id=r["hold_route_id"] or "",
+            ope_no=r["target_hold_operation_id"] or "",
+            hold_code=r["dh_code"] or "",
+            hold_user=r["dh_user"] or "",
+            hold_memo=r["dh_memo"] or "",
+            role=BindingRole.PREVENTIVE,
+            status=BindingStatus(r["dh_status"]),
             created_at=parse_iso(r["created_at"]) or datetime.min,
             updated_at=parse_iso(r["updated_at"]) or datetime.min,
             order_id=r["order_id"],
-            generation=r["generation"],
-            mes_hold_record_id=r["mes_hold_record_id"],
-            hold_token=r["hold_token"],
-            target_step_occurrence=r["target_step_occurrence"],
-            hold_kind=HoldKind(r["hold_kind"]) if r["hold_kind"] else None,
-            time_quality=r["time_quality"],
-            requested_at=parse_iso(r["requested_at"]),
-            provider_created_at=parse_iso(r["provider_created_at"]),
-            first_confirmed_at=parse_iso(r["first_confirmed_at"]),
-            effective_at=parse_iso(r["effective_at"]),
-            release_requested_at=parse_iso(r["release_requested_at"]),
-            released_at=parse_iso(r["released_at"]),
-            release_verified_at=parse_iso(r["release_verified_at"]),
+            generation=r["dh_generation"] or 1,
+            hold_kind=HoldKind(r["dh_kind"]) if r["dh_kind"] else None,
+            time_quality=r["dh_time_quality"] or "ESTIMATED",
+            requested_at=parse_iso(r["dh_requested_at"]),
+            first_confirmed_at=parse_iso(r["dh_first_confirmed_at"]),
+            release_requested_at=parse_iso(r["dh_release_requested_at"]),
+            released_at=parse_iso(r["dh_released_at"]),
         )
 
     def list_by_order(self, order_id: str) -> list[HoldBinding]:
-        rows = self._u.conn.execute("SELECT * FROM hold_binding WHERE order_id=?", (order_id,)).fetchall()
-        return [self._from(r) for r in rows]
+        r = self._u.conn.execute("SELECT * FROM hold_order WHERE order_id=?", (order_id,)).fetchone()
+        b = self._from(r) if r else None
+        return [b] if b else []
 
     def find_by_mes_tuple(self, lot_id, route_id, ope_no, hold_code, hold_user) -> list[HoldBinding]:
         rows = self._u.conn.execute(
-            """SELECT * FROM hold_binding WHERE lot_id=? AND route_id=? AND ope_no=?
-               AND hold_code=? AND hold_user=?""",
+            """SELECT * FROM hold_order WHERE lot_id=? AND hold_route_id=? AND target_hold_operation_id=?
+               AND dh_code=? AND dh_user=? AND dh_status IS NOT NULL""",
             (lot_id, route_id, ope_no, hold_code, hold_user),
         ).fetchall()
-        return [self._from(r) for r in rows]
+        return [b for b in (self._from(r) for r in rows) if b]
 
     def list_all(self) -> list[HoldBinding]:
-        return [self._from(r) for r in self._u.conn.execute("SELECT * FROM hold_binding").fetchall()]
+        rows = self._u.conn.execute("SELECT * FROM hold_order WHERE dh_status IS NOT NULL").fetchall()
+        return [b for b in (self._from(r) for r in rows) if b]
 
 
 class _Actions:
     def __init__(self, uow: SqliteUnitOfWork) -> None:
         self._u = uow
 
-    def _from(self, r) -> ActionCommand:
+    def _latest(self, command_id: str):
+        return self._u.conn.execute(
+            "SELECT * FROM mes_action WHERE command_id=? ORDER BY attempt_no DESC LIMIT 1",
+            (command_id,),
+        ).fetchone()
+
+    def _from_cmd(self, r) -> ActionCommand:
         return ActionCommand(
             command_id=r["command_id"],
             order_id=r["order_id"],
@@ -434,80 +424,116 @@ class _Actions:
             hold_code=r["hold_code"],
             target_occurrence=r["target_occurrence"],
             payload_hash=r["payload_hash"],
-            payload_json=r["payload_json"] if "payload_json" in r.keys() else None,
+            payload_json=r["payload_json"],
             receipt_outcome=ReceiptOutcome(r["receipt_outcome"]) if r["receipt_outcome"] else None,
-            current_attempt_id=r["current_attempt_id"],
+            current_attempt_id=r["attempt_id"],
             expected_postcondition=r["expected_postcondition"],
-            evidence_ref=r["evidence_ref"],
         )
 
     def get_command(self, command_id: str) -> ActionCommand | None:
-        r = self._u.conn.execute("SELECT * FROM action_command WHERE command_id=?", (command_id,)).fetchone()
-        return self._from(r) if r else None
+        r = self._latest(command_id)
+        return self._from_cmd(r) if r else None
 
     def get_in_flight(self, order_id: str) -> ActionCommand | None:
-        rows = self._u.conn.execute(
-            "SELECT * FROM action_command WHERE order_id=? ORDER BY created_at", (order_id,)
-        ).fetchall()
-        for r in reversed(rows):
-            cmd = self._from(r)
+        for cmd in reversed(self.list_by_order(order_id)):
             if cmd.action_state in IN_FLIGHT_ACTION_STATES:
                 return cmd
         return None
 
     def list_by_order(self, order_id: str) -> list[ActionCommand]:
-        rows = self._u.conn.execute(
-            "SELECT * FROM action_command WHERE order_id=? ORDER BY created_at", (order_id,)
-        ).fetchall()
-        return [self._from(r) for r in rows]
+        ids = [
+            r[0]
+            for r in self._u.conn.execute(
+                """SELECT command_id FROM mes_action WHERE order_id=?
+                   GROUP BY command_id ORDER BY MIN(created_at)""",
+                (order_id,),
+            ).fetchall()
+        ]
+        out = []
+        for cid in ids:
+            cmd = self.get_command(cid)
+            if cmd:
+                out.append(cmd)
+        return out
 
     def insert_prepared(self, c: ActionCommand) -> None:
+        aid = c.current_attempt_id or c.command_id
         try:
             self._u.conn.execute(
-                """INSERT INTO action_command (
-                    command_id, order_id, logical_action_key, action_type, generation, hold_code,
-                    target_occurrence, idempotency_key, payload_hash, payload_json, action_state, receipt_outcome,
-                    current_attempt_id, expected_postcondition, evidence_ref, created_at, updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT INTO mes_action (
+                    attempt_id, command_id, order_id, logical_action_key, action_type, generation,
+                    hold_code, target_occurrence, idempotency_key, payload_hash, payload_json,
+                    action_state, receipt_outcome, expected_postcondition, attempt_no, started_at,
+                    created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    c.command_id, c.order_id, c.logical_action_key, _e(c.action_type), c.generation,
+                    aid, c.command_id, c.order_id, c.logical_action_key, _e(c.action_type), c.generation,
                     c.hold_code, c.target_occurrence, c.idempotency_key, c.payload_hash, c.payload_json,
-                    _e(c.action_state), _e(c.receipt_outcome), c.current_attempt_id,
-                    c.expected_postcondition, c.evidence_ref, _t(c.created_at), _t(c.updated_at),
+                    _e(c.action_state), _e(c.receipt_outcome), c.expected_postcondition, 1,
+                    _t(c.created_at), _t(c.created_at), _t(c.updated_at),
                 ),
             )
         except sqlite3.IntegrityError as exc:
             raise ConstraintError(str(exc)) from exc
 
     def save_command(self, c: ActionCommand) -> None:
+        r = self._latest(c.command_id)
+        if r is None:
+            return
         self._u.conn.execute(
-            """UPDATE action_command SET action_state=?, receipt_outcome=?, current_attempt_id=?,
-                expected_postcondition=?, evidence_ref=?, updated_at=? WHERE command_id=?""",
+            """UPDATE mes_action SET action_state=?, receipt_outcome=?, expected_postcondition=?,
+                updated_at=? WHERE attempt_id=?""",
             (
-                _e(c.action_state), _e(c.receipt_outcome), c.current_attempt_id,
-                c.expected_postcondition, c.evidence_ref, _t(c.updated_at), c.command_id,
+                _e(c.action_state), _e(c.receipt_outcome), c.expected_postcondition,
+                _t(c.updated_at), r["attempt_id"],
             ),
         )
 
     def add_attempt(self, a: ActionAttempt) -> None:
+        dup = self._u.conn.execute(
+            "SELECT attempt_id FROM mes_action WHERE command_id=? AND attempt_no=?",
+            (a.command_id, a.attempt_no),
+        ).fetchone()
+        if dup:
+            self._u.conn.execute(
+                """UPDATE mes_action SET receipt_outcome=?, finished_at=?, dispatched_at=?,
+                    provider_request_id=?, raw_error_code=?, normalized_error=?, retry_class=?,
+                    raw_response_masked=?, actor=?, rule_id=?, updated_at=? WHERE attempt_id=?""",
+                (
+                    _e(a.receipt_outcome), _t(a.finished_at), _t(a.dispatched_at),
+                    a.provider_request_id, a.raw_error_code, a.normalized_error, a.retry_class,
+                    a.raw_response_masked, a.actor, a.rule_id, _t(a.finished_at or a.started_at),
+                    dup["attempt_id"],
+                ),
+            )
+            return
+        prev = self._latest(a.command_id)
+        if prev is None:
+            return
         self._u.conn.execute(
-            """INSERT INTO action_history (
-                attempt_id, command_id, order_id, attempt_no, started_at, dispatched_at, finished_at,
-                receipt_outcome, provider_request_id, raw_error_code, normalized_error, retry_class,
-                raw_response_masked, actor, rule_id, program_version, before_snapshot_ref,
-                after_snapshot_ref
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO mes_action (
+                attempt_id, command_id, order_id, logical_action_key, action_type, generation,
+                hold_code, target_occurrence, idempotency_key, payload_hash, payload_json,
+                action_state, receipt_outcome, expected_postcondition, attempt_no, started_at,
+                dispatched_at, finished_at, provider_request_id, raw_error_code, normalized_error,
+                retry_class, raw_response_masked, actor, rule_id, created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
-                a.attempt_id, a.command_id, a.order_id, a.attempt_no, _t(a.started_at),
-                _t(a.dispatched_at), _t(a.finished_at), _e(a.receipt_outcome), a.provider_request_id,
-                a.raw_error_code, a.normalized_error, a.retry_class, a.raw_response_masked,
-                a.actor, a.rule_id, a.program_version, a.before_snapshot_ref, a.after_snapshot_ref,
+                a.attempt_id, a.command_id, a.order_id, prev["logical_action_key"], prev["action_type"],
+                prev["generation"], prev["hold_code"], prev["target_occurrence"], prev["idempotency_key"],
+                prev["payload_hash"], prev["payload_json"], prev["action_state"], _e(a.receipt_outcome),
+                prev["expected_postcondition"], a.attempt_no, _t(a.started_at), _t(a.dispatched_at),
+                _t(a.finished_at), a.provider_request_id, a.raw_error_code, a.normalized_error,
+                a.retry_class, a.raw_response_masked, a.actor, a.rule_id,
+                prev["created_at"], _t(a.finished_at or a.started_at),
             ),
         )
 
     def list_history(self, order_id: str) -> list[ActionAttempt]:
         rows = self._u.conn.execute(
-            "SELECT * FROM action_history WHERE order_id=? ORDER BY command_id, attempt_no",
+            """SELECT * FROM mes_action WHERE order_id=?
+               AND (receipt_outcome IS NOT NULL OR finished_at IS NOT NULL)
+               ORDER BY command_id, attempt_no""",
             (order_id,),
         ).fetchall()
         return [
@@ -527,9 +553,6 @@ class _Actions:
                 raw_response_masked=r["raw_response_masked"],
                 actor=r["actor"],
                 rule_id=r["rule_id"],
-                program_version=r["program_version"],
-                before_snapshot_ref=r["before_snapshot_ref"],
-                after_snapshot_ref=r["after_snapshot_ref"],
             )
             for r in rows
         ]
@@ -558,7 +581,6 @@ class _Incidents:
             rework_count=r["rework_count"],
             reason=r["reason"],
             error_detail=r["error_detail"],
-            evidence_ref=r["evidence_ref"],
             acked_at=parse_iso(r["acked_at"]),
             acked_by=r["acked_by"],
             resolved_at=parse_iso(r["resolved_at"]),
@@ -577,13 +599,13 @@ class _Incidents:
             """INSERT INTO incident (
                 incident_id, subject_kind, subject_key, order_id, source_event_id, lot_id,
                 origin_operation_id, rework_count, incident_type, episode_id, severity, status,
-                reason, error_detail, evidence_ref, first_seen_at, last_seen_at, occurrence_count
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                reason, error_detail, first_seen_at, last_seen_at, occurrence_count
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 incident.incident_id, incident.subject_kind, incident.subject_key, incident.order_id,
                 incident.source_event_id, incident.lot_id, incident.origin_ope_no, incident.rework_count,
                 incident.incident_type, incident.episode_id, incident.severity, incident.status,
-                incident.reason, incident.error_detail, incident.evidence_ref,
+                incident.reason, incident.error_detail,
                 _t(incident.first_seen_at), _t(incident.last_seen_at), incident.occurrence_count,
             ),
         )
@@ -615,63 +637,61 @@ class _Outbox:
 
     def _from(self, r) -> OutboxRow:
         return OutboxRow(
-            outbox_id=r["outbox_id"],
+            outbox_id=r["incident_id"],
             incident_id=r["incident_id"],
-            channel=r["channel"],
-            payload=r["payload"],
-            delivery_status=r["delivery_status"],
-            created_at=parse_iso(r["created_at"]) or datetime.min,
-            attempt_count=r["attempt_count"],
-            last_error=r["last_error"],
-            next_retry_at=parse_iso(r["next_retry_at"]),
-            provider_msg_id=r["provider_msg_id"],
-            sent_at=parse_iso(r["sent_at"]),
-            acked_at=parse_iso(r["acked_at"]),
+            channel=r["mail_channel"] or "email",
+            payload=r["mail_payload"] or "",
+            delivery_status=r["mail_status"] or "PENDING",
+            created_at=parse_iso(r["first_seen_at"]) or datetime.min,
+            attempt_count=r["mail_attempt_count"] or 0,
+            last_error=r["mail_last_error"],
+            next_retry_at=parse_iso(r["mail_next_retry_at"]),
+            provider_msg_id=r["mail_provider_msg_id"],
+            sent_at=parse_iso(r["mail_sent_at"]),
+            acked_at=parse_iso(r["mail_acked_at"]),
         )
 
     def enqueue(self, row: OutboxRow) -> None:
         self._u.conn.execute(
-            """INSERT INTO alarm_outbox (
-                outbox_id, incident_id, channel, payload, delivery_status, attempt_count,
-                last_error, next_retry_at, created_at
-            ) VALUES (?,?,?,?,?,?,?,?,?)""",
+            """UPDATE incident SET mail_channel=?, mail_payload=?, mail_status=?,
+                mail_attempt_count=?, mail_next_retry_at=? WHERE incident_id=?""",
             (
-                row.outbox_id, row.incident_id, row.channel, row.payload, row.delivery_status,
-                row.attempt_count, row.last_error, _t(row.next_retry_at), _t(row.created_at),
+                row.channel, row.payload, row.delivery_status,
+                row.attempt_count, _t(row.next_retry_at), row.incident_id,
             ),
         )
 
     def list_pending(self, now: datetime, limit: int = 100) -> list[OutboxRow]:
         rows = self._u.conn.execute(
-            """SELECT * FROM alarm_outbox WHERE delivery_status IN ('PENDING','FAILED')
-               AND (next_retry_at IS NULL OR next_retry_at<=?)
-               ORDER BY created_at LIMIT ?""",
+            """SELECT * FROM incident WHERE mail_status IN ('PENDING','FAILED')
+               AND (mail_next_retry_at IS NULL OR mail_next_retry_at<=?)
+               ORDER BY first_seen_at LIMIT ?""",
             (_t(now), limit),
         ).fetchall()
         return [self._from(r) for r in rows]
 
     def mark_sent(self, outbox_id: str, at: datetime, provider_msg_id: str | None) -> None:
         self._u.conn.execute(
-            "UPDATE alarm_outbox SET delivery_status='SENT', sent_at=?, provider_msg_id=? WHERE outbox_id=?",
+            "UPDATE incident SET mail_status='SENT', mail_sent_at=?, mail_provider_msg_id=? WHERE incident_id=?",
             (_t(at), provider_msg_id, outbox_id),
         )
 
     def mark_failed(self, outbox_id: str, at: datetime, error: str, next_retry_at: datetime) -> None:
         self._u.conn.execute(
-            """UPDATE alarm_outbox SET delivery_status='FAILED', last_error=?, next_retry_at=?,
-               attempt_count=attempt_count+1 WHERE outbox_id=?""",
+            """UPDATE incident SET mail_status='FAILED', mail_last_error=?, mail_next_retry_at=?,
+               mail_attempt_count=mail_attempt_count+1 WHERE incident_id=?""",
             (error, _t(next_retry_at), outbox_id),
         )
 
     def mark_acked(self, outbox_id: str, at: datetime) -> None:
         self._u.conn.execute(
-            "UPDATE alarm_outbox SET delivery_status='ACKED', acked_at=? WHERE outbox_id=?",
+            "UPDATE incident SET mail_status='ACKED', mail_acked_at=? WHERE incident_id=?",
             (_t(at), outbox_id),
         )
 
     def get(self, outbox_id: str) -> OutboxRow | None:
-        r = self._u.conn.execute("SELECT * FROM alarm_outbox WHERE outbox_id=?", (outbox_id,)).fetchone()
-        return self._from(r) if r else None
+        r = self._u.conn.execute("SELECT * FROM incident WHERE incident_id=?", (outbox_id,)).fetchone()
+        return self._from(r) if r and r["mail_status"] else None
 
 
 class _Control:
@@ -679,7 +699,7 @@ class _Control:
         self._u = uow
 
     def get(self, scope: str) -> SystemControl:
-        r = self._u.conn.execute("SELECT * FROM system_control WHERE scope=?", (scope,)).fetchone()
+        r = self._u.conn.execute("SELECT * FROM agent_control WHERE scope=?", (scope,)).fetchone()
         return SystemControl(
             scope=r["scope"],
             mode=ControlMode(r["mode"]),
@@ -690,20 +710,17 @@ class _Control:
             disabled_at=parse_iso(r["disabled_at"]),
             sponsor_id=r["sponsor_id"],
             sponsor_approved_at=parse_iso(r["sponsor_approved_at"]),
-            resume_evidence_ref=r["resume_evidence_ref"],
-            health_check_ref=r["health_check_ref"],
         )
 
     def save(self, control: SystemControl, expected_version: int) -> None:
         cur = self._u.conn.execute(
-            "UPDATE system_control SET mode=?, control_version=?, disable_reason=?, disable_trigger=?, "
-            "disabled_at=?, sponsor_id=?, sponsor_approved_at=?, resume_evidence_ref=?, health_check_ref=?, "
-            "updated_at=? WHERE scope=? AND control_version=?",
+            "UPDATE agent_control SET mode=?, control_version=?, disable_reason=?, disable_trigger=?, "
+            "disabled_at=?, sponsor_id=?, sponsor_approved_at=?, updated_at=? "
+            "WHERE scope=? AND control_version=?",
             (
                 _e(control.mode), expected_version + 1, control.disable_reason, control.disable_trigger,
                 _t(control.disabled_at), control.sponsor_id, _t(control.sponsor_approved_at),
-                control.resume_evidence_ref, control.health_check_ref, _t(control.updated_at),
-                control.scope, expected_version,
+                _t(control.updated_at), control.scope, expected_version,
             ),
         )
         if cur.rowcount != 1:
@@ -716,33 +733,10 @@ class _Snaps:
         self._u = uow
 
     def put(self, s: ObservationSnapshot) -> None:
-        self._u.conn.execute(
-            """INSERT INTO observation_snapshot (
-                snapshot_id, order_id, source_name, outcome, observed_at, source_event_time,
-                source_watermark, source_version, error_code, error_message, payload_hash, payload, created_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                s.snapshot_id, s.order_id, s.source_name, _e(s.outcome), _t(s.observed_at),
-                _t(s.source_event_time), s.source_watermark, s.source_version, s.error_code,
-                s.error_message, s.payload_hash, s.payload, _t(s.created_at),
-            ),
-        )
+        return
 
     def get(self, snapshot_id: str) -> ObservationSnapshot | None:
-        r = self._u.conn.execute(
-            "SELECT * FROM observation_snapshot WHERE snapshot_id=?", (snapshot_id,)
-        ).fetchone()
-        if not r:
-            return None
-        return ObservationSnapshot(
-            snapshot_id=r["snapshot_id"],
-            source_name=r["source_name"],
-            outcome=SourceStatus(r["outcome"]),
-            observed_at=parse_iso(r["observed_at"]) or datetime.min,
-            created_at=parse_iso(r["created_at"]) or datetime.min,
-            order_id=r["order_id"],
-            payload=r["payload"],
-        )
+        return None
 
 
 class _Cursors:
@@ -750,23 +744,20 @@ class _Cursors:
         self._u = uow
 
     def get(self, name: str) -> DiscoveryCursor | None:
-        r = self._u.conn.execute("SELECT * FROM discovery_cursor WHERE cursor_name=?", (name,)).fetchone()
-        if not r:
+        r = self._u.conn.execute("SELECT last_heartbeat_at, updated_at FROM agent_control WHERE scope='DEFAULT'").fetchone()
+        if not r or not r["last_heartbeat_at"]:
             return None
         return DiscoveryCursor(
-            cursor_name=r["cursor_name"],
-            updated_at=parse_iso(r["updated_at"]) or datetime.min,
-            last_event_id=r["last_event_id"],
-            last_event_time=parse_iso(r["last_event_time"]),
+            cursor_name=name,
+            updated_at=parse_iso(r["last_heartbeat_at"]) or datetime.min,
+            last_event_id="ok",
+            last_event_time=parse_iso(r["last_heartbeat_at"]),
         )
 
     def advance(self, name: str, last_event_id: str, last_event_time: datetime, at: datetime) -> None:
         self._u.conn.execute(
-            """INSERT INTO discovery_cursor (cursor_name, last_event_id, last_event_time, updated_at)
-               VALUES (?,?,?,?)
-               ON CONFLICT(cursor_name) DO UPDATE SET last_event_id=excluded.last_event_id,
-                 last_event_time=excluded.last_event_time, updated_at=excluded.updated_at""",
-            (name, last_event_id, _t(last_event_time), _t(at)),
+            "UPDATE agent_control SET last_heartbeat_at=?, updated_at=? WHERE scope='DEFAULT'",
+            (_t(at), _t(at)),
         )
 
 
@@ -778,11 +769,11 @@ class _Inbound:
         try:
             self._u.conn.execute(
                 """INSERT INTO inbound_event (
-                    source_event_id, site_id, lot_id, origin_operation_id, rework_count, event_time,
+                    source_event_id, lot_id, origin_operation_id, rework_count, event_time,
                     observed_at, payload, consumed, order_id, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    e.source_event_id, e.site_id, e.lot_id, e.origin_ope_no, e.rework_count,
+                    e.source_event_id, e.lot_id, e.origin_ope_no, e.rework_count,
                     _t(e.event_time), _t(e.observed_at), e.payload, 1 if e.consumed else 0,
                     e.order_id, _t(e.created_at),
                 ),
@@ -804,7 +795,6 @@ class _Inbound:
             lot_id=r["lot_id"],
             observed_at=parse_iso(r["observed_at"]) or datetime.min,
             created_at=parse_iso(r["created_at"]) or datetime.min,
-            site_id=r["site_id"],
             origin_ope_no=r["origin_operation_id"],
             rework_count=r["rework_count"],
             event_time=parse_iso(r["event_time"]),

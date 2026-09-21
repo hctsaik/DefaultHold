@@ -218,7 +218,7 @@ def loc_for_record(r: dict[str, Any], locator: dict | None = None) -> dict[str, 
             run = first_loc(locator, "A2-11", "event:RELEASE_CONFIRMED", prefer="usecases/verify_release")
         elif action == "SET_HOLD" or rule in {"A1-03", "A1-04"}:
             run = first_loc(locator, "event:HOLD_INTENT", prefer="usecases/request_hold")
-        elif action == "SET_RELEASE" or rule in {"A2-07", "A2-08"}:
+        elif action == "SET_RELEASE" or rule in {"A2-07", "A2-08", "A2-21"}:
             run = first_loc(locator, "event:RELEASE_INTENT", prefer="usecases/request_release")
         elif rule == "A2-09":
             run = first_loc(locator, "A2-09", prefer="pipelines/check_ai")
@@ -236,7 +236,7 @@ def loc_for_record(r: dict[str, Any], locator: dict | None = None) -> dict[str, 
         decide = first_loc(locator, "A2-01", prefer="domain/derive")
     elif ev.startswith("release."):
         run = first_loc(locator, f"event:{attr}", "A2-11", prefer="usecases")
-        decide = first_loc(locator, rule or "A2-07", prefer="domain/derive")
+        decide = first_loc(locator, rule or "A2-21", prefer="domain/derive")
     elif ev == "order.created":
         run = first_loc(locator, "event:ORDER_CREATED", prefer="pipelines/set_default_hold")
         decide = first_loc(locator, "A1-01", prefer="domain/derive")
@@ -289,7 +289,7 @@ def facts_state_rule(decision: dict[str, Any]) -> dict[str, Any]:
         states.append(("Hold 觀察", str(facts["hold_query"]), "FOUND=查到列；NOT_FOUND=確定沒有；UNKNOWN=不能當沒有"))
     states.append(("本系統 Hold 筆數", str(facts.get("own_hold_count")), "≥1 已有防守，不再 A1-03 新設"))
     states.append(("未完成命令", str(inflight), "SET_HOLD:* → 只能查驗 A2-01；SET_RELEASE:* → A2-10"))
-    states.append(("AI", str(facts.get("ai_status")), "WAITING→A2-05；COMPLETE_OK→A2-07；DEFECT→A2-08/09"))
+    states.append(("AI", str(facts.get("ai_status")), "WAITING→A2-05；掃完未滿 settle→A2-09；滿 settle→A2-21"))
     states.append(("工作狀態", str(work), "HOLD_VERIFY_PENDING / WAIT_AI / READY_RELEASE_OK …"))
     states.append(("控制開關", str(facts.get("control")), "非 ENABLED → A1-08 不新設 Hold"))
     return {

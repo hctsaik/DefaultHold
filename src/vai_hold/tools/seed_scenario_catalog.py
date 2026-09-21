@@ -7,13 +7,14 @@ HAPPY = [
     {"op": "run", "fn": "set"},
     {"op": "run", "fn": "confirm"},
 ]
+SETTLE = {"op": "settle"}
 
 # 查案頁用 V1 §13 的寫法：情境 / 預期 / 禁止。不要自行改寫成「必須做／通過條件」。
 SPEC = {
     "T01": {
-        "situation": "正常 Hold、25 片全 OK",
-        "expected": "建立→查驗→Release→查驗→CLOSED",
-        "forbidden": "未查驗就結案",
+        "situation": "正常 Hold、25 片全掃完",
+        "expected": "建立→查驗→等 settle→Release→查驗→CLOSED／SCAN_COMPLETED",
+        "forbidden": "未查驗就結案；掃完立刻解",
     },
     "T02": {"situation": "ENHL Conflict，OTHL 成功", "expected": "用 OTHL 防守、保存 ENHL 錯誤", "forbidden": "舊 Error 導致 HOLD_FAILED"},
     "T03": {"situation": "三組都明確失敗", "expected": "HOLD_FAILED、一次持續 Incident、立即通知", "forbidden": "靜默等待 30 分鐘"},
@@ -23,10 +24,10 @@ SPEC = {
     "T09": {"situation": "25 片只有 24 片完成", "expected": "WAIT_AI", "forbidden": "Release"},
     "T10": {"situation": "Log 25 筆但有一片重複、一片缺少", "expected": "WAIT_AI、列出缺少 Wafer", "forbidden": "用列數判完成"},
     "T11": {"situation": "空 Roster／Roster 尚未確定", "expected": "WAIT_AI／資料異常", "forbidden": "誤把空名單當完成"},
-    "T12": {"situation": "Completed Time 全有但某片 Result 缺值", "expected": "AI_RESULT_INVALID", "forbidden": "當 No Defect"},
+    "T12": {"situation": "有 ScanCompletedTime 即當掃完", "expected": "當成掃完，滿 settle 後可解", "forbidden": "沒有結果欄就卡住"},
     "T13": {"situation": "Rework 1 只有 Rework 0 的完成資料", "expected": "等待本輪 AI，建立本輪防守", "forbidden": "套用舊結果／舊 Hold"},
-    "T14": {"situation": "有 Defect 且正式 Future Hold 有效", "expected": "只解除預防性 Hold", "forbidden": "解除正式 Defect Hold"},
-    "T15": {"situation": "有 Defect 但正式 Hold 未設，掃完已滿 2 分鐘", "expected": "解除 Default Hold，SCAN_COMPLETED", "forbidden": "data_error 告警；冒充設 SMM"},
+    "T14": {"situation": "有 Defect，掃完已滿 settle", "expected": "只解除 Default Hold，結案 SCAN_COMPLETED", "forbidden": "未查驗就結案"},
+    "T15": {"situation": "有 Defect，掃完已滿 settle 分鐘", "expected": "解除 Default Hold，SCAN_COMPLETED", "forbidden": "data_error 告警；冒充設 SMM"},
     "T16": {"situation": "Release 生效但回覆 Timeout", "expected": "查驗後 CLOSED", "forbidden": "看到無 Hold 又建立 Hold"},
     "T17": {"situation": "Release 明確失敗、Hold 仍在", "expected": "RELEASE_FAILED、保留防守與告警", "forbidden": "直接 CLOSED"},
     "T18": {
@@ -62,8 +63,8 @@ SPEC = {
     "HOLD_UNKNOWN_NO_RESEND": {"situation": "Timeout 後 Hold 查詢仍 UNKNOWN", "expected": "保持查驗、不重送", "forbidden": "UNKNOWN 當 ABSENT 再送一次"},
     "REL_RETRY3": {"situation": "同一 Release 暫時拒絕", "expected": "同一命令最多 3 次、Hold 仍在", "forbidden": "直接 CLOSED"},
     "REL_TIMEOUT_RETRY3": {"situation": "Release Timeout 且 Hold 還在", "expected": "先查再重送，最多 3 次", "forbidden": "暫時看不到 Hold 就當已解除"},
-    "XFER_ACCUM": {"situation": "第一片 Defect 已有 Lot Hold #1，第二片再 Defect", "expected": "transferHold 把 Memo 改成 Please check #1,#2；Default Hold 不解", "forbidden": "再 SET 一筆 SmmHold 或解 Default Hold"},
-    "XFER_RETRY3": {"situation": "transferHold 暫時拒絕", "expected": "同一命令最多 3 次，Memo 仍 #1", "forbidden": "無止盡 retry 或當成已改 Memo"},
+    "XFER_ACCUM": {"situation": "第一片 Defect 已有 Lot Hold #1，第二片再 Defect，尚未掃完", "expected": "本 Agent 不改 SMM Memo；Default Hold 先不解", "forbidden": "transferHold 或解 Default Hold"},
+    "XFER_RETRY3": {"situation": "現場 SMM Memo 不完整", "expected": "本 Agent 不送 transferHold", "forbidden": "改 SMM Memo"},
 }
 
 # 工程師對題：現場／這輪要做／做完應看到／禁止。規格只有三句、這裡有兩種解 → 標 open，停下來問，不准自己選。
@@ -71,7 +72,7 @@ ENG = {
     "T01": {
         "given": "Lot 進站，MES 上還沒有本系統 Default Hold。",
         "do": "這題只是把 C01～C06 串起來的走完證明。真正驗收看 C01–C06。",
-        "then": "訂單 CLOSED（AI_OK）；MES 上本系統 Hold 已沒有。",
+        "then": "訂單 CLOSED（SCAN_COMPLETED）；MES 上本系統 Hold 已沒有。",
         "dont": "AI 還沒查完就結案；也不要把四支 Cron 當成同一輪。",
     },
     "C01": {
@@ -93,10 +94,10 @@ ENG = {
         "dont": "還沒掃完就申請解除 Default Hold。",
     },
     "C04": {
-        "given": "Default Hold 已確認存在；所有 wafer 掃完且都 OK。",
+        "given": "Default Hold 已確認存在；所有 wafer 已掃完（OK 或 NG 同一條），且已滿 config 的 settle 分鐘。",
         "do": "向 MES 申請解除 Default Hold。",
-        "then": "解除已送出；MES 可能還沒寫完；這張單還沒結案。",
-        "dont": "這一輪就把單結案。",
+        "then": "解除已送出；結案原因 SCAN_COMPLETED；這張單還沒結案。",
+        "dont": "這一輪就把單結案；也不要因為全 OK 就跳過等待。",
     },
     "C05": {
         "given": "已申請解除 Default Hold，MES 上可能還沒跟上，Hold 還看得到。",
@@ -107,7 +108,7 @@ ENG = {
     "C06": {
         "given": "已申請解除，MES 上自己的 Default Hold 已經沒有。",
         "do": "確認 Default Hold 已解除，這張單結案。",
-        "then": "單結案（全數 OK）。",
+        "then": "單結案（SCAN_COMPLETED）。",
         "dont": "Hold 還在就結案。",
     },
     "T02": {
@@ -129,22 +130,22 @@ ENG = {
         "dont": "當成事故再設一筆 Hold；也不要標成「全數 OK 結案」。",
     },
     "C09": {
-        "given": "所有 wafer 已掃完，有 Defect，現場還沒有 SMM Hold。最後一片掃完已滿 2 分鐘。",
-        "do": "不等 SMM Hold，向 MES 申請解除 Default Hold。保護空窗由另一隻程式處理。",
+        "given": "所有 wafer 已掃完（有 Defect），已滿 config 的 settle 分鐘。",
+        "do": "向 MES 申請解除 Default Hold。",
         "then": "解除已送出；結案原因 SCAN_COMPLETED。不留 data_error、不開告警。",
-        "dont": "冒充去設 SMM Hold。全 OK 或已有 SMM Hold 不要再等 2 分鐘。",
+        "dont": "還沒滿 settle 就解。",
     },
     "C10": {
-        "given": "Default Hold 已在；有 Defect；MES 上已有 SMM Hold。",
-        "do": "確認 SMM Hold 已接手後，向 MES 申請解除 Default Hold。不解 SMM Hold。",
-        "then": "解除 Default Hold 已送出；SMM Hold 還在；這張單還沒結案。",
-        "dont": "把 SMM Hold 一起解掉；這一輪就把單結案。",
+        "given": "Default Hold 已在；所有 wafer 已掃完（有 Defect）；已滿 settle 分鐘。",
+        "do": "向 MES 申請解除 Default Hold。",
+        "then": "解除已送出；這張單還沒結案。",
+        "dont": "這一輪就把單結案。",
     },
     "C11": {
-        "given": "已申請解除 Default Hold；SMM Hold 還在。",
-        "do": "確認自己的 Default Hold 已解除，這張單結案。SMM Hold 必須還在。",
-        "then": "單結案（已交給 SMM Hold）；SMM Hold 仍在。",
-        "dont": "把 SMM Hold 一起解掉。",
+        "given": "已申請解除 Default Hold（掃完 Defect 後、已滿 settle）。",
+        "do": "確認自己的 Default Hold 已解除，這張單結案。",
+        "then": "單結案（SCAN_COMPLETED）。",
+        "dont": "Hold 還在就結案。",
     },
     "T03": {
         "given": "ENHL、OTHL、第三碼都被 MES 明確衝突拒絕。",
@@ -189,10 +190,10 @@ ENG = {
         "dont": "空名單當成全部完成而 Release。",
     },
     "T12": {
-        "given": "Default Hold 已設上。有片有 ScanCompletedTime，但沒有 Alarm Type。",
-        "do": "先當掃完（可繼續判斷／解除）。同時在 order_wafer.missing_alarm_type 留下紀錄，事後可查。",
-        "then": "不當 AI_RESULT_INVALID；W03 等片在 Order DB 有 missing_alarm_type=1。",
-        "dont": "沒有 Alarm Type 就卡住不解，又不留紀錄。",
+        "given": "Default Hold 已設上。所有片都有 ScanCompletedTime。",
+        "do": "只看有沒有掃完時間。有 ScanCompletedTime 就當掃完；滿 settle 後申請解除 Default Hold。",
+        "then": "RELEASE_SENT。不當 AI_RESULT_INVALID。",
+        "dont": "因為結果欄是空的就卡住不解。",
     },
     "T13": {
         "given": "同一 Lot 出現 Rework 1；Rework 0 的 AI 已經有了。",
@@ -201,13 +202,13 @@ ENG = {
         "dont": "拿 Rework 0 的結果或 Hold 給 Rework 1 用。",
     },
     "T14": {
-        "given": "AI 有 Defect，MES 上已有正式 SmmHold。",
+        "given": "AI 有 Defect。已滿 settle 分鐘。",
         "do": "只解除本系統 Default Hold。",
-        "then": "Default Hold 沒了；SmmHold 還在；結案 TRANSFERRED。",
-        "dont": "把正式 Defect Hold 一起解掉。",
+        "then": "Default Hold 沒了；結案 SCAN_COMPLETED。",
+        "dont": "還沒確認 MES 上自己的 Hold 沒了就結案。",
     },
     "T15": {
-        "given": "AI 有 Defect，正式 SmmHold 不在。掃完已滿 2 分鐘。",
+        "given": "AI 有 Defect。掃完已滿 settle 分鐘。",
         "do": "申請解除 Default Hold；結案 SCAN_COMPLETED。",
         "then": "RELEASE_SENT；close_reason=SCAN_COMPLETED。",
         "dont": "留 data_error／C09 告警；冒充設 SMM Hold。",
@@ -384,16 +385,16 @@ ENG = {
         "dont": "Delay 就重送或當已解除而 CLOSED。",
     },
     "XFER_ACCUM": {
-        "given": "第一片 Defect 已有 Lot Hold「Please check #1」；第二片又 Defect。",
-        "do": "transferHold 把 Memo 改成 Please check #1,#2；Default Hold 先不解。",
-        "then": "仍一筆 SmmHold；Memo 已累積。",
-        "dont": "再 SET 一筆 SmmHold，或把 Default Hold 解掉。",
+        "given": "第一片 Defect 已有 Lot Hold「Please check #1」；第二片又 Defect；還沒全部掃完。",
+        "do": "不改 SMM Memo，繼續等全部掃完。",
+        "then": "SMM Memo 仍 #1；Default Hold 不解。",
+        "dont": "transferHold，或把 Default Hold 解掉。",
     },
     "XFER_RETRY3": {
-        "given": "transferHold 暫時被拒。",
-        "do": "同一命令最多 3 次。",
-        "then": "Memo 仍 #1；Default Hold 不解。",
-        "dont": "無止盡重試，或當成 Memo 已改。",
+        "given": "現場已有 SMM Memo #1，第二片 Defect，還沒全部掃完。",
+        "do": "本 Agent 不送 transferHold。",
+        "then": "Memo 仍 #1；沒有 TRANSFER_HOLD 命令。",
+        "dont": "改 SMM Memo。",
     },
 }
 
@@ -416,13 +417,14 @@ def seed_cases() -> list[ScenarioCase]:
     cases = [
         _s("T01", "v1", "【串接】進站到結案（對照用，驗收看 C01～C06）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
         ], {
             "lifecycle": "CLOSED",
-            "close_reason": "AI_OK",
+            "close_reason": "SCAN_COMPLETED",
             "last_rule_id": "A2-11",
-            "actions": {"set_hold": 1, "release": 1, "transfer": 0},
+            "actions": {"set_hold": 1, "release": 1},
             "facts": {
                 "Lot": {"LotId": "LOT1", "OpeNo": "OP100"},
                 "DefaultHold": {"QueryStatus": "NOT_FOUND"},
@@ -443,7 +445,7 @@ def seed_cases() -> list[ScenarioCase]:
             "lifecycle": "OPEN",
             "actions": {"set_hold": 1, "release": 0},
         }, n=2),
-        _s("C03", "stage", "C03 等所有 Wafer 判斷完 SMM（原 T01-WAIT）", HAPPY + [
+        _s("C03", "stage", "C03 等所有 Wafer 掃完（原 T01-WAIT）", HAPPY + [
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "WAIT_AI",
@@ -451,6 +453,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=3),
         _s("C04", "stage", "C04 申請解除 Default Hold（原 T01-CHECK）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "RELEASE_SENT",
@@ -459,6 +462,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=4),
         _s("C05", "stage", "C05 查驗解除（允許 DB Delay）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "set_world", "release_response": {"LOT1": "timeout"}, "set_effect": {"release:LOT1": "none"}},
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
@@ -469,11 +473,12 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=5),
         _s("C06", "stage", "C06 確認已解除才結案（原 T01-RELEASE）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
         ], {
             "lifecycle": "CLOSED",
-            "close_reason": "AI_OK",
+            "close_reason": "SCAN_COMPLETED",
             "work_state": "CLOSED",
         }, n=6),
         _s("T02", "v1", "【串接】ENHL 衝突後改 OTHL", [
@@ -549,12 +554,12 @@ def seed_cases() -> list[ScenarioCase]:
             {"op": "run", "fn": "confirm"},
             {"op": "run", "fn": "check"},
         ], {"work_state": "WAIT_AI", "actions": {"release": 0}}, n=11),
-        _s("T12", "ai", "有 ScanCompletedTime 無 Alarm Type → 當完成並留紀錄", HAPPY + [
+        _s("T12", "ai", "有 ScanCompletedTime 即當掃完", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1", "missing_result": "W03"},
+            SETTLE,
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "RELEASE_SENT",
-            "missing_alarm_wafers": ["W03"],
         }, n=12),
         _s("T13", "order", "Rework 隔離", [
             {"op": "add_lot", "lot_id": "LOT1", "rework_count": 0},
@@ -570,40 +575,37 @@ def seed_cases() -> list[ScenarioCase]:
             "lifecycle": "OPEN",
             "open_count": 2,
         }, n=13),
-        _s("T14", "v1", "【串接】Defect 交接走到結案", HAPPY + [
+        _s("T14", "v1", "【串接】Defect 掃完 + settle 走到結案", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1", "result": "DEFECT"},
-            {"op": "add_defect_hold", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
         ], {
             "lifecycle": "CLOSED",
-            "close_reason": "TRANSFERRED",
+            "close_reason": "SCAN_COMPLETED",
             "last_rule_id": "A2-11",
-            "facts": {"SmmHold": {"Holds": [{"HoldCode": "SMMH", "HoldUser": "AOA"}]}},
         }, n=14),
-        _s("C10", "stage", "C10 有 SMM Hold 才申請解除 Default Hold（原 T14-CHECK）", HAPPY + [
+        _s("C10", "stage", "C10 Defect 掃完 + settle 申請解除（原 T14-CHECK）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1", "result": "DEFECT"},
-            {"op": "add_defect_hold", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "RELEASE_SENT",
             "lifecycle": "OPEN",
             "actions": {"release": 1},
-            "facts": {"SmmHold": {"Holds": [{"HoldCode": "SMMH", "HoldUser": "AOA"}]}},
         }, n=10),
-        _s("C11", "stage", "C11 確認已解除且 SMM Hold 仍在（原 T14-RELEASE）", HAPPY + [
+        _s("C11", "stage", "C11 確認已解除才結案（Defect 路徑，原 T14-RELEASE）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1", "result": "DEFECT"},
-            {"op": "add_defect_hold", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
         ], {
             "lifecycle": "CLOSED",
-            "close_reason": "TRANSFERRED",
-            "facts": {"SmmHold": {"Holds": [{"HoldCode": "SMMH", "HoldUser": "AOA"}]}},
+            "close_reason": "SCAN_COMPLETED",
         }, n=11),
-        _s("C09", "stage", "C09 有 Defect 無 SMM Hold 逾時解（原 T15）", HAPPY + [
+        _s("C09", "stage", "C09 有 Defect，settle 後解（原 T15）", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1", "result": "DEFECT"},
-            {"op": "advance", "minutes": 2},
+            SETTLE,
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "RELEASE_SENT",
@@ -615,6 +617,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=9),
         _s("T16", "release", "Release timeout 但 Hold 已消失 → CLOSED", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "set_world", "release_response": {"LOT1": "timeout"}},
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "set"},
@@ -625,6 +628,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=16),
         _s("T17", "release", "Release 被拒，Hold 仍在", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "set_world", "release_response": {"LOT1": "rejected_permission"}},
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
@@ -686,7 +690,7 @@ def seed_cases() -> list[ScenarioCase]:
             "target_ope_no": "OP200",
             "actions": {"set_hold": 1},
         }, n=24),
-        _s("T25", "hold", "【現場不適用】Hold 查詢 UNKNOWN", [
+        _s("T25", "hold", "現場不適用：MES 一定能回答有沒有 Hold，這題不跑", [
             {"op": "add_lot", "lot_id": "LOT1"},
             {"op": "set_world", "list_status": {"LOT1": "unknown"}},
             {"op": "run", "fn": "set"},
@@ -719,6 +723,7 @@ def seed_cases() -> list[ScenarioCase]:
         _s("T28", "control", "停用新 Hold 仍可解除", HAPPY + [
             {"op": "disable_control"},
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
         ], {"lifecycle": "CLOSED"}, n=28),
@@ -738,6 +743,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=30),
         _s("T31", "defense", "已結案又出現本系統 Hold", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
             {"op": "add_standard_hold", "lot_id": "LOT1", "ope_no": "OP200"},
@@ -819,6 +825,7 @@ def seed_cases() -> list[ScenarioCase]:
         ], {"actions": {"set_hold": 1}}, n=53),
         _s("REL_RETRY3", "retry", "SET_RELEASE 暫時拒絕同一命令 3 次", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "set_world", "release_response": {"LOT1": "rejected_transient"}},
             {"op": "repeat", "times": 5, "steps": [{"op": "run", "fn": "check"}, {"op": "run", "fn": "release"}]},
         ], {
@@ -830,6 +837,7 @@ def seed_cases() -> list[ScenarioCase]:
         }, n=54),
         _s("REL_TIMEOUT_RETRY3", "retry", "Release timeout 且 Hold 還看得到＝Delay，不重送", HAPPY + [
             {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
             {"op": "set_world", "release_response": {"LOT1": "timeout"}, "set_effect": {"release:LOT1": "none"}},
             {"op": "run", "fn": "check"},
             {"op": "run", "fn": "release"},
@@ -839,7 +847,7 @@ def seed_cases() -> list[ScenarioCase]:
             "lifecycle": "OPEN",
             "actions": {"release": 1},
         }, n=55),
-        _s("XFER_ACCUM", "smm", "Please check #1 → transferHold #1,#2", HAPPY + [
+        _s("XFER_ACCUM", "smm", "未掃完不改 SMM Memo、不解 Default Hold", HAPPY + [
             {"op": "scan_wafer", "lot_id": "LOT1", "wafer_id": "W01", "result": "DEFECT"},
             {"op": "add_defect_hold", "lot_id": "LOT1", "memo": "Please check #1"},
             {"op": "run", "fn": "check"},
@@ -847,23 +855,19 @@ def seed_cases() -> list[ScenarioCase]:
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "WAIT_AI",
-            "smm_memo": "Please check #1,#2",
-            "actions": {"transfer": 1, "release": 0},
-            "facts": {"SmmHold": {"Holds": [{"HoldMemo": "Please check #1,#2"}]}},
+            "smm_memo": "Please check #1",
+            "actions": {"release": 0},
+            "facts": {"SmmHold": {"Holds": [{"HoldMemo": "Please check #1"}]}},
         }, n=56),
-        _s("XFER_RETRY3", "retry", "transferHold 暫時拒絕同一命令 3 次", HAPPY + [
+        _s("XFER_RETRY3", "retry", "本 Agent 不送 transferHold", HAPPY + [
             {"op": "scan_wafer", "lot_id": "LOT1", "wafer_id": "W01", "result": "DEFECT"},
             {"op": "add_defect_hold", "lot_id": "LOT1", "memo": "Please check #1"},
             {"op": "run", "fn": "check"},
             {"op": "scan_wafer", "lot_id": "LOT1", "wafer_id": "W02", "result": "DEFECT"},
-            {"op": "set_world", "transfer_response": {"LOT1": "rejected_transient"}},
             {"op": "repeat", "times": 5, "steps": [{"op": "run", "fn": "check"}]},
         ], {
             "work_state": "WAIT_AI",
             "smm_memo": "Please check #1",
-            "actions": {"transfer": 3},
-            "command_count": {"TRANSFER_HOLD": 1},
-            "attempt_max": 3,
             "lifecycle": "OPEN",
         }, n=57),
     ]

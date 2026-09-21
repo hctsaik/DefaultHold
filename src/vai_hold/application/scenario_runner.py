@@ -234,6 +234,8 @@ def run_script(h, script: list[dict[str, Any]]) -> None:
         elif op == "advance":
             kwargs = {k: v for k, v in step.items() if k != "op"}
             h.clock.advance(**kwargs)
+        elif op == "settle":
+            h.settle()
         elif op == "append_event":
             now = h.clock.now()
             h.world.events.append(
@@ -348,15 +350,11 @@ def collect_actual(h, case: ScenarioCase) -> dict[str, Any]:
         "actions": {
             "set_hold": len(h.world.set_hold_calls),
             "release": len(h.world.release_calls),
-            "transfer": len(h.world.transfer_calls),
         },
         "attempt_max": max((a.attempt_no for a in hist), default=0),
         "command_count": {
             "SET_HOLD": len([c for c in (h.commands(lot_id) if order else []) if c.action_type.value == "SET_HOLD"]),
             "SET_RELEASE": len([c for c in (h.commands(lot_id) if order else []) if c.action_type.value == "SET_RELEASE"]),
-            "TRANSFER_HOLD": len(
-                [c for c in (h.commands(lot_id) if order else []) if c.action_type.value == "TRANSFER_HOLD"]
-            ),
         },
         "incidents": sorted({i.incident_type for i in h.incidents()}),
         "incident_rows": [

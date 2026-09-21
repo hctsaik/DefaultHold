@@ -2,12 +2,12 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>T12 — 先當掃完（可繼續判斷／解除）</title>
+  <title>T12 — 只看有沒有掃完時間</title>
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
     mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { htmlLabels: true } });
     document.addEventListener("DOMContentLoaded", () => {
-      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘", "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解", "READY_RELEASE_OK": "可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "有 Defect 且 SMM Hold 已接手，可解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
+      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘", "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解", "READY_RELEASE_OK": "可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "已掃完且滿 settle，可解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
       const applyTips = () => {
         document.querySelectorAll("svg .stateLabel, svg .nodeLabel, svg text").forEach((el) => {
           const t = (el.textContent || "").trim().split(/\s|\n/)[0];
@@ -37,6 +37,7 @@
     .badge.pass { background:#d1fae5; color:#065f46; }
     .badge.fail { background:#fee2e2; color:#991b1b; }
     .badge.none { background:#e7e5e4; color:#44403c; }
+    .badge.skip { background:#fef3c7; color:#92400e; }
     a { color:#0f766e; }
     tr.row:hover { background:#fafaf9; }
     tr.env td:first-child { color:#78716c; }
@@ -77,41 +78,41 @@
 <body>
 <header>
   <p><a href="index.html">← 全部情境</a></p>
-  <h1>T12　先當掃完（可繼續判斷／解除）</h1>
-  <p class="muted">有 ScanCompletedTime 無 Alarm Type → 當完成並留紀錄 · <strong>沒有重跑模擬</strong></p>
+  <h1>T12　只看有沒有掃完時間</h1>
+  <p class="muted">有 ScanCompletedTime 即當掃完 · <strong>沒有重跑模擬</strong></p>
   
 </header>
 <main>
   <div class="card spec">
     <h2>這題要做什麼</h2>
     <table>
-      <tr><th>現場已經</th><td>Default Hold 已設上。有片有 ScanCompletedTime，但沒有 Alarm Type。</td></tr>
-      <tr><th>實際系統會做</th><td><strong>先當掃完（可繼續判斷／解除）。同時在 order_wafer.missing_alarm_type 留下紀錄，事後可查。</strong></td></tr>
-      <tr><th>做完現場應看到</th><td>不當 AI_RESULT_INVALID；W03 等片在 Order DB 有 missing_alarm_type=1。</td></tr>
-      <tr><th>禁止</th><td>沒有 Alarm Type 就卡住不解，又不留紀錄。</td></tr>
+      <tr><th>現場已經</th><td>Default Hold 已設上。所有片都有 ScanCompletedTime。</td></tr>
+      <tr><th>實際系統會做</th><td><strong>只看有沒有掃完時間。有 ScanCompletedTime 就當掃完；滿 settle 後申請解除 Default Hold。</strong></td></tr>
+      <tr><th>做完現場應看到</th><td>RELEASE_SENT。不當 AI_RESULT_INVALID。</td></tr>
+      <tr><th>禁止</th><td>因為結果欄是空的就卡住不解。</td></tr>
     </table>
     
-    <p class='muted'>規格原文：情境「Completed Time 全有但某片 Result 缺值」／預期「AI_RESULT_INVALID」／禁止「當 No Defect」。</p>
+    <p class='muted'>規格原文：情境「有 ScanCompletedTime 即當掃完」／預期「當成掃完，滿 settle 後可解」／禁止「沒有結果欄就卡住」。</p>
   </div>
   <div class="verdict pass">結論：與預期相符
-    <div class="sub"><strong>實際系統做了：</strong>向 MES 申請解除 Default Hold。</div>
+    <div class="sub"><strong>實際系統做了：</strong>已全部掃完且滿 settle 分鐘，申請解除 Default Hold。</div>
     <div class="sub"><strong>現在：</strong>已向 MES 申請解除 Default Hold，還沒確認解除成功，這張單尚未結案。</div>
   </div>
   
   <div class="card">
     <h2>這張單走到哪裡</h2>
     <p class="muted">時間軸，不是「Hold 已經在現場」。有時間＝這一步做過；—＝還沒做。「送出」不是「已確認存在」。黃底＝這題停在這裡。</p>
-    
-    <table class="milestones"><thead><tr><th>進站</th><th>送出 Default Hold</th><th>確認 Default Hold 存在</th><th>確認 SMM Hold 存在</th><th>解除 Default Hold</th><th>確認解除 Default Hold</th><th>結案</th></tr></thead>
-    <tbody><tr><td class='hit'>2026-03-18 06:14:37 UTC</td><td class='hit'>2026-03-18 06:16:00 UTC</td><td class='hit'>2026-03-18 06:17:00 UTC</td><td class=''>—</td><td class='hit here'>2026-03-18 06:23:00 UTC</td><td class=''>—</td><td class=''>—</td></tr></tbody></table>
+    <p class='muted'>結案原因 <code>SCAN_COMPLETED</code></p>
+    <table class="milestones"><thead><tr><th>進站</th><th>送出 Default Hold</th><th>確認 Default Hold 存在</th><th>解除 Default Hold</th><th>確認解除 Default Hold</th><th>結案</th></tr></thead>
+    <tbody><tr><td class='hit'>2026-03-18 06:14:37 UTC</td><td class='hit'>2026-03-18 06:16:00 UTC</td><td class='hit'>2026-03-18 06:17:00 UTC</td><td class='hit here'>2026-03-18 06:25:00 UTC</td><td class=''>—</td><td class=''>—</td></tr></tbody></table>
   </div>
 
   
   <div class="card focus">
     <h2>為什麼做這一步</h2>
     <p class="muted">這是<strong>原因</strong>，不是時間軸。黃底＝做決定時看到的條件。綠底＝因此去做的事。送出的內容在「待查驗」，不在這裡。</p>
-    <table class="milestones"><thead><tr><th>本系統 Default Hold</th><th>SMM Hold</th><th>掃片</th><th>因此做了</th></tr></thead>
-    <tbody><tr><td class=''>沒有</td><td class=''>沒有</td><td class='here'>掃完 25/25</td><td class='then'>向 MES 申請解除 Default Hold</td></tr></tbody></table>
+    <table class="milestones"><thead><tr><th>本系統 Default Hold</th><th>掃片</th><th>剛送出還沒查完</th><th>因此做了</th></tr></thead>
+    <tbody><tr><td class=''>沒有</td><td class=''>掃完 25/25</td><td class='here'>剛解除 Default Hold，還沒查完</td><td class='then'>向 MES 確認 Default Hold 是否已解除</td></tr></tbody></table>
   </div>
 
   
@@ -128,24 +129,19 @@
 }</pre></div><div><h3>DefaultHold</h3><p class='muted'>已向 MES 查驗、確認是本系統 Default Hold 的那一筆（或確認已經沒有）。</p><pre>{
   &quot;QueryStatus&quot;: &quot;NOT_FOUND&quot;,
   &quot;Holds&quot;: []
-}</pre></div><div><h3>SmmHold</h3><p class='muted'>已查過的現場正式 Defect Hold（SMMH／AOA）。空陣列＝查過、現場沒有。</p><pre>{
-  &quot;StepMode&quot;: &quot;DefaultHoldStep&quot;,
-  &quot;OpeNo&quot;: &quot;OP200&quot;,
-  &quot;QueryStatus&quot;: &quot;NOT_FOUND&quot;,
-  &quot;Holds&quot;: []
 }</pre></div><div><h3>AiScan</h3><p class='muted'>已查過的掃片結果。</p><pre>{
   &quot;QueryStatus&quot;: &quot;FOUND&quot;,
   &quot;ExpectedCount&quot;: 25,
   &quot;ScannedCount&quot;: 25,
   &quot;LatestScanTime&quot;: &quot;2026-03-18T06:21:48Z&quot;,
-  &quot;RecTime&quot;: &quot;2026-03-18T06:23:00Z&quot;
+  &quot;RecTime&quot;: &quot;2026-03-18T06:25:00Z&quot;
 }</pre></div></div>
   </div>
   <div class="card">
     <h2>發生了什麼</h2>
     <p class="muted">灰＝現場進站；青＝本系統對 MES 做的事。這不是「Hold 已在現場」。</p>
     <table><thead><tr><th>#</th><th>時間</th><th>發生什麼</th></tr></thead>
-    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>現場已經：Lot 進站 LOT1 OP100（Operation Start）</td></tr><tr class='given'><td>2</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>上一格已經：設 Default Hold</td></tr><tr class='given'><td>3</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>上一格已經：查驗 Default Hold 是否還在</td></tr><tr class='env'><td>4</td><td><code>2026-03-18 06:21:48 UTC</code></td><td>現場已經：AI 完成但無結果（W03）</td></tr><tr class='act when'><td>5</td><td><code>2026-03-18 06:23:00 UTC</code></td><td>查 AI 是否掃完；必要時解除或改 Memo</td></tr></tbody></table>
+    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>現場已經：Lot 進站 LOT1 OP100（Operation Start）</td></tr><tr class='given'><td>2</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>上一格已經：設 Default Hold</td></tr><tr class='given'><td>3</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>上一格已經：查驗 Default Hold 是否還在</td></tr><tr class='env'><td>4</td><td><code>2026-03-18 06:21:48 UTC</code></td><td>現場已經：AI 完成但無結果（W03）</td></tr><tr class='env'><td>5</td><td><code>2026-03-18 06:21:48 UTC</code></td><td>現場已經：settle</td></tr><tr class='act when'><td>6</td><td><code>2026-03-18 06:25:00 UTC</code></td><td>查 AI 是否掃完</td></tr></tbody></table>
   </div>
   <details class="card"><summary>給對程式的人（狀態機、路徑、檔名、對照明細）</summary>
     <div class="card spec">
@@ -177,33 +173,30 @@ flowchart TB
   n2 --> n3
   n4(["<span style='color:#0f766e;font-weight:700'>4. AI 完成但無結果（W03）</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:21:48 UTC<br/>application/services.py:snapshot<br/>AiPort.read_results</span>"])
   n3 --> n4
-  n5["<span style='color:#0f766e;font-weight:700'>5. 查 AI 是否掃完；必要時解除或改 Memo</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:23:00 UTC<br/>pipelines/check_ai.py:run<br/>domain/derive.py:derive_state<br/>AiPort.read_results / HoldPort</span>"]
+  n5(["<span style='color:#0f766e;font-weight:700'>5. settle</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:21:48 UTC</span>"])
   n4 --> n5
-  e0["結果 RELEASE_SENT / A2-07"]
-  n5 --> e0
-  class n1,n2,n3,n4 env
-  class n5 act
+  n6["<span style='color:#0f766e;font-weight:700'>6. 查 AI 是否掃完</span><br/><span style='color:#57534e;font-size:11px'>2026-03-18 06:25:00 UTC<br/>pipelines/check_ai.py:run<br/>domain/derive.py:derive_state<br/>AiPort.read_results / HoldPort</span>"]
+  n5 --> n6
+  e0["結果 RELEASE_SENT / A2-21"]
+  n6 --> e0
+  class n1,n2,n3,n4,n5 env
+  class n6 act
   class e0 endn
 
     </pre>
     <h3>劇本（含 file:function）</h3>
     <table><thead><tr><th>#</th><th>時間</th><th>發生什麼</th><th>file:function</th><th>Port</th></tr></thead>
-    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>Lot 進站 LOT1 OP100（Operation Start）</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>SmmPort.list_start_events</code></td><td></td></tr><tr class='given'><td>2</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>設 Default Hold</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>usecases/request_hold.py:request_hold</code></td><td>HoldPort.set_hold</td></tr><tr class='given'><td>3</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>查驗 Default Hold 是否還在</td><td><code>pipelines/confirm_hold.py:run</code><br/><code>usecases/verify_hold.py:verify_hold</code></td><td>HoldPort.list_holds</td></tr><tr class='env'><td>4</td><td><code>2026-03-18 06:21:48 UTC</code></td><td>AI 完成但無結果（W03）</td><td><code>application/services.py:snapshot</code><br/><code>AiPort.read_results</code></td><td></td></tr><tr class='act when'><td>5</td><td><code>2026-03-18 06:23:00 UTC</code></td><td>查 AI 是否掃完；必要時解除或改 Memo</td><td><code>pipelines/check_ai.py:run</code><br/><code>domain/derive.py:derive_state</code></td><td>AiPort.read_results / HoldPort</td></tr></tbody></table>
+    <tbody><tr class='env'><td>1</td><td><code>2026-03-18 06:14:37 UTC</code></td><td>Lot 進站 LOT1 OP100（Operation Start）</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>SmmPort.list_start_events</code></td><td></td></tr><tr class='given'><td>2</td><td><code>2026-03-18 06:16:00 UTC</code></td><td>設 Default Hold</td><td><code>pipelines/set_default_hold.py:run</code><br/><code>usecases/request_hold.py:request_hold</code></td><td>HoldPort.set_hold</td></tr><tr class='given'><td>3</td><td><code>2026-03-18 06:17:00 UTC</code></td><td>查驗 Default Hold 是否還在</td><td><code>pipelines/confirm_hold.py:run</code><br/><code>usecases/verify_hold.py:verify_hold</code></td><td>HoldPort.list_holds</td></tr><tr class='env'><td>4</td><td><code>2026-03-18 06:21:48 UTC</code></td><td>AI 完成但無結果（W03）</td><td><code>application/services.py:snapshot</code><br/><code>AiPort.read_results</code></td><td></td></tr><tr class='env'><td>5</td><td><code>2026-03-18 06:21:48 UTC</code></td><td>settle</td><td><code></code></td><td></td></tr><tr class='act when'><td>6</td><td><code>2026-03-18 06:25:00 UTC</code></td><td>查 AI 是否掃完</td><td><code>pipelines/check_ai.py:run</code><br/><code>domain/derive.py:derive_state</code></td><td>AiPort.read_results / HoldPort</td></tr></tbody></table>
     <details class="card"><summary>對照明細（可略過；結論已寫在上面）</summary>
     <p class="muted">題目規定要對上的欄位，對這次跑完的結果。通過時不必逐列看。</p>
-    <table><thead><tr><th>檢查什麼</th><th>題目規定</th><th>這次跑完</th></tr></thead><tbody><tr><td><code>work_state</code></td><td><code>RELEASE_SENT</code></td><td><code>RELEASE_SENT</code></td></tr><tr><td><code>missing_alarm_wafers</code></td><td><pre>[
-  &quot;W03&quot;
-]</pre></td><td><pre>[
-  &quot;W03&quot;
-]</pre></td></tr></tbody></table>
+    <table><thead><tr><th>檢查什麼</th><th>題目規定</th><th>這次跑完</th></tr></thead><tbody><tr><td><code>work_state</code></td><td><code>RELEASE_SENT</code></td><td><code>RELEASE_SENT</code></td></tr></tbody></table>
   </details>
     <h3>actions</h3>
     <pre>{
   &quot;set_hold&quot;: 1,
-  &quot;release&quot;: 1,
-  &quot;transfer&quot;: 0
+  &quot;release&quot;: 1
 }</pre>
-    <p class="muted">scenario_run 2026-09-20T01:06:52Z</p>
+    <p class="muted">scenario_run 2026-09-21T19:05:14Z</p>
   </details>
   
 </main>

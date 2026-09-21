@@ -100,9 +100,9 @@ class HoldPort(Protocol):
     def list_holds(self, lot_id: str) -> SourceResult[list[HoldCommand]]: ...
 ```
 
-`transfer_hold`：同一 LotId/RouteId/OpeNo/HoldCode/HoldUser，只改 Memo。用於 wafer-based SmmHold：`Please check #1` → `Please check #1,#2`。片號從 MES wafer id 解析：`A123456.01` → `#1`（小數點後段）。AI 設第一筆；本 Agent 在已知 Defect slot 超出 memo 時 concile。同一 logical action（同一 idempotency_key）含第 1 次最多送 **3** 次；換 Code／換 memo 是新動作。Timeout 先 `list_holds` 再重送，不准無止盡 retry。
+本 Agent **不解、不改、不設 SMM Hold**（不送 transferHold）。YAML `smm_hold` 只用來認現場已有的 SMMH／AOA：進站時 Default Hold 站上已有 → **不設** Default Hold（D04）。
 
-掃完有 Defect、現場還沒 SMM Hold：未滿 `Max(ScanCompletedTime)+2 分鐘` 暫不解；**滿 2 分鐘就申請解除** Default Hold，`close_reason=SCAN_COMPLETED`，不留 data_error／告警。保護空窗由另一隻程式處理。全 OK 或已有 SMM Hold：**立刻解，不等 2 分鐘**。現場沒有結案 GUI：**Hold 解掉就當結案**。
+解 Default Hold 只看「是不是全部掃完」。OK／NG 同一條：未滿 `Max(ScanCompletedTime)+release.scan_settle_minutes` 暫不解；滿了就申請解除，`close_reason=SCAN_COMPLETED`，不留 data_error／告警。settle 分鐘在 config，預設 2。現場沒有結案 GUI：**Hold 解掉就當結案**。
 
 狀態沒變的 Cron 不准重寫 Order、不准重印 `eval.cycle`／`incident.opened`。SET 只處理尚未設上的單。
 

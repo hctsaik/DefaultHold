@@ -135,7 +135,7 @@ class HoldOrder:
     last_rule_id: str | None = None
     state_reason: str | None = None
     close_reason: str | None = None
-    data_error: str | None = None  # 事後可查：NO_SMM_HOLD_AFTER_SCAN 等
+    data_error: str | None = None  # 事後可查的資料錯誤；解 Hold 不再寫 NO_SMM_HOLD_AFTER_SCAN
     last_snapshot_ref: str | None = None
     row_version: int = 1
     next_check_at: datetime | None = None
