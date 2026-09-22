@@ -8,8 +8,11 @@ from vai_hold.application.log import emit
 from vai_hold.application.logevents import Event
 from vai_hold.application.services import (
     iter_scoped_open_orders,
+    iter_recent_orders,
     maybe_resolve_order_incidents,
+    maybe_open_release_verify_overdue,
     open_incident,
+    recent_cutoff,
     snapshot,
 )
 from vai_hold.domain.enums import BindingRole, BindingStatus, ControlMode, FunctionCode, Lifecycle, SourceStatus
@@ -37,13 +40,15 @@ def run(app: App, params: dict) -> RunResult:
             )
         overdue_lots: set[str] = set()
         owned: set[tuple] = set()
-        for order in uow.orders.list_all(2000):
-            if not app.settings.allows_lot(order.lot_id):
-                continue
+        recent_orders = list(iter_recent_orders(app, uow, int(params.get("limit") or 500)))
+        for order in recent_orders:
             for b in uow.holds.list_by_order(order.order_id):
                 if b.role == BindingRole.PREVENTIVE:
                     owned.add((b.lot_id, b.route_id, b.ope_no, b.hold_code, b.hold_user))
             snap = snapshot(app, uow, order)
+            maybe_open_release_verify_overdue(
+                app, uow, order, snap, now, function_code=FN
+            )
             if order.lifecycle == Lifecycle.CLOSED:
                 mes = list(snap.hold_query.value or []) if snap.hold_query.value else []
                 own = match_our_holds(
@@ -81,9 +86,11 @@ def run(app: App, params: dict) -> RunResult:
                     now=now, function_code=FN, rule_id="A2-14",
                 )
             maybe_resolve_order_incidents(app, uow, order, snap, now)
-        lot_ids = {
-            k[0] for k in app.smm.expected_keys() if app.settings.allows_lot(k[0])
-        } | {o.lot_id for o in uow.orders.list_all(2000) if app.settings.allows_lot(o.lot_id)}
+        cutoff = recent_cutoff(app, now)
+        expected_keys = {
+            k for k in app.smm.expected_keys(since=cutoff) if app.settings.allows_lot(k[0])
+        }
+        lot_ids = {k[0] for k in expected_keys} | {o.lot_id for o in recent_orders}
         for lot_id in lot_ids:
             q = app.hold.list_holds(lot_id)
             if q.status not in (SourceStatus.FOUND, SourceStatus.NOT_FOUND):
@@ -99,7 +106,7 @@ def run(app: App, params: dict) -> RunResult:
                         reason="default hold without order", now=now, function_code=FN, rule_id="D-04",
                     )
 
-        expected = {k for k in app.smm.expected_keys() if app.settings.allows_lot(k[0])}
+        expected = expected_keys
         actual_keys = {order.key.as_tuple() for order in iter_scoped_open_orders(app, uow, 1000)}
         missing = expected - actual_keys
         extra = actual_keys - expected

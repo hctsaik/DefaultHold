@@ -249,6 +249,62 @@ class _Orders:
         ).fetchall()
         return [_order_from_row(r) for r in rows]
 
+    def _list_since(
+        self,
+        since: datetime,
+        *,
+        open_only: bool,
+        limit: int,
+        after_created_at: datetime | None,
+        after_order_id: str | None,
+    ) -> list[HoldOrder]:
+        # 12 小時候選窗以本輪進站時間為準；updated_at 只是處理時間。
+        clauses = ["COALESCE(operation_start_at, created_at) >= ?"]
+        values: list[object] = [_t(since)]
+        if open_only:
+            clauses.append("lifecycle='OPEN'")
+        if after_created_at is not None:
+            clauses.append("(created_at > ? OR (created_at = ? AND order_id > ?))")
+            cursor = _t(after_created_at)
+            values.extend([cursor, cursor, after_order_id or ""])
+        values.append(limit)
+        rows = self._u.conn.execute(
+            f"SELECT * FROM hold_order WHERE {' AND '.join(clauses)} "
+            "ORDER BY created_at, order_id LIMIT ?",
+            tuple(values),
+        ).fetchall()
+        return [_order_from_row(r) for r in rows]
+
+    def list_open_since(
+        self,
+        since: datetime,
+        limit: int = 500,
+        after_created_at: datetime | None = None,
+        after_order_id: str | None = None,
+    ) -> list[HoldOrder]:
+        return self._list_since(
+            since,
+            open_only=True,
+            limit=limit,
+            after_created_at=after_created_at,
+            after_order_id=after_order_id,
+        )
+
+    def list_all_since(
+        self,
+        since: datetime,
+        limit: int = 500,
+        after_created_at: datetime | None = None,
+        after_order_id: str | None = None,
+    ) -> list[HoldOrder]:
+        return self._list_since(
+            since,
+            open_only=False,
+            limit=limit,
+            after_created_at=after_created_at,
+            after_order_id=after_order_id,
+        )
+
     def try_claim(
         self,
         order_id: str,
@@ -304,6 +360,7 @@ class _Wafers:
             ai_result=d.get("ai_result"),
             defect_types=d.get("defect_types"),
             result_version=d.get("result_version"),
+            missing_alarm_type=bool(d.get("missing_alarm_type", False)),
         )
 
     def _from(self, w: OrderWafer) -> dict:
@@ -314,6 +371,7 @@ class _Wafers:
             "ai_result": w.ai_result,
             "defect_types": w.defect_types,
             "result_version": w.result_version,
+            "missing_alarm_type": w.missing_alarm_type,
             "updated_at": _t(w.updated_at),
         }
 
@@ -754,17 +812,21 @@ class _Control:
             disabled_at=parse_iso(r["disabled_at"]),
             sponsor_id=r["sponsor_id"],
             sponsor_approved_at=parse_iso(r["sponsor_approved_at"]),
+            resume_evidence_ref=r["resume_evidence_ref"],
+            health_check_ref=r["health_check_ref"],
         )
 
     def save(self, control: SystemControl, expected_version: int) -> None:
         cur = self._u.conn.execute(
             "UPDATE agent_control SET mode=?, control_version=?, disable_reason=?, disable_trigger=?, "
-            "disabled_at=?, sponsor_id=?, sponsor_approved_at=?, updated_at=? "
+            "disabled_at=?, sponsor_id=?, sponsor_approved_at=?, resume_evidence_ref=?, "
+            "health_check_ref=?, updated_at=? "
             "WHERE scope=? AND control_version=?",
             (
                 _e(control.mode), expected_version + 1, control.disable_reason, control.disable_trigger,
                 _t(control.disabled_at), control.sponsor_id, _t(control.sponsor_approved_at),
-                _t(control.updated_at), control.scope, expected_version,
+                control.resume_evidence_ref, control.health_check_ref, _t(control.updated_at),
+                control.scope, expected_version,
             ),
         )
         if cur.rowcount != 1:

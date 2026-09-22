@@ -173,6 +173,46 @@ def test_t12_completed_without_result(h: Harness):
     h.check_ai()
     assert h.order().work_state == WorkState.RELEASE_SENT
     assert h.world.release_calls
+    order = h.order()
+    with h.app.uow_factory.new() as uow:
+        wafer = next(w for w in uow.wafers.list_by_order(order.order_id) if w.wafer_id == "W03")
+    assert wafer.ai_result is None
+    assert wafer.missing_alarm_type
+
+
+def test_scan_completed_invalid_result_still_releases(h: Harness):
+    _happy_until_hold(h)
+    _complete_and_settle(h, result="INVALID")
+    h.check_ai()
+    assert h.order().work_state == WorkState.RELEASE_SENT
+    assert "AI_RESULT_INVALID" not in {i.incident_type for i in h.incidents()}
+
+
+def test_existing_smm_hold_closes_when_all_scan_times_exist_without_settle(h: Harness):
+    h.world.add_lot("LOT1")
+    h.world.add_defect_hold("LOT1", ope_no="OP200")
+    h.set_hold()
+    h.world.complete_ai("LOT1", result="DEFECT")
+    h.check_ai()
+    assert h.order().lifecycle == Lifecycle.CLOSED
+    assert not h.world.set_hold_calls
+    assert not h.world.release_calls
+
+
+def test_entry_smm_hold_may_disappear_and_scan_completion_still_closes(h: Harness):
+    h.world.add_lot("LOT1")
+    h.world.add_defect_hold("LOT1", ope_no="OP200")
+    h.set_hold()
+    assert h.order().last_rule_id == "A2-20"
+
+    h.world.holds = [x for x in h.world.holds if x.hold_code != "SMMH"]
+    h.world.complete_ai("LOT1", missing_result="W03")
+    h.check_ai()
+
+    assert h.order().lifecycle == Lifecycle.CLOSED
+    assert h.order().close_reason == "SCAN_COMPLETED"
+    assert not h.world.set_hold_calls
+    assert not h.world.release_calls
 
 
 def test_all_ok_before_settle_does_not_release(h: Harness):
@@ -324,7 +364,7 @@ def test_agent_does_not_transfer_smm_hold_memo(h: Harness):
     h.check_ai()
     h.world.scan_wafer(lot, wafers[1], result="DEFECT")
     h.check_ai()
-    assert h.world.transfer_calls == []
+    assert not [c for c in h.commands(lot) if c.action_type.value == "TRANSFER_HOLD"]
     smm = [x for x in h.world.holds if x.hold_code == "SMMH"]
     assert smm and smm[0].memo == "Please check #1"
     assert h.order(lot).work_state == WorkState.WAIT_AI
@@ -342,6 +382,17 @@ def test_retry_hold_uses_frozen_memo_not_new_settings(h: Harness):
     assert h.world.set_hold_calls[-1].memo == original
     assert h.world.set_hold_calls[-1].memo != "CHANGED MEMO SHOULD NOT BE SENT"
     assert h.world.set_hold_calls[-1].idempotency_key == h.world.set_hold_calls[0].idempotency_key
+
+
+def test_confirmed_hold_ownership_uses_frozen_binding_after_config_change(h: Harness):
+    _happy_until_hold(h)
+    original_hold = h.world.holds[0]
+    h.settings.hold_memo = "NEW DEFAULT MEMO"
+    h.settings.hold_user = "NEW_USER"
+    h.check_ai()
+    assert h.order().lifecycle == Lifecycle.OPEN
+    assert h.order().work_state == WorkState.WAIT_AI
+    assert original_hold in h.world.holds
 
 
 def test_set_hold_retries_same_command_at_most_three_times(h: Harness):
@@ -384,6 +435,19 @@ def test_t14_defect_does_not_release_smm_hold(h: Harness):
     assert h.order().close_reason == "SCAN_COMPLETED"
     assert any(x.hold_user == "AOA" and x.hold_code == "SMMH" for x in h.world.holds)
     assert len([x for x in h.world.holds if x.hold_user == "AOA"]) == len(defect_before)
+
+
+def test_release_verification_does_not_require_smm_hold(h: Harness):
+    _happy_until_hold(h)
+    _complete_and_settle(h, result="DEFECT")
+    h.world.add_defect_hold("LOT1")
+    h.check_ai()
+    h.world.holds = [x for x in h.world.holds if x.hold_code != "SMMH"]
+
+    h.confirm_release()
+
+    assert h.order().lifecycle == Lifecycle.CLOSED
+    assert h.order().close_reason == "SCAN_COMPLETED"
 
 
 def test_t15_defect_without_formal_hold(h: Harness):

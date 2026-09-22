@@ -176,12 +176,12 @@ _STEP_TITLE = {
     ("decision.applied", "A2-04"): "線上代解，視為解除成功 A2-04",
     ("decision.applied", "A2-05"): "等 AI A2-05",
     ("decision.applied", "A2-07"): "AI OK A2-07",
-    ("decision.applied", "A2-08"): "Defect 交接 A2-08",
-    ("decision.applied", "A2-16"): "SmmHold transfer A2-16",
-    ("transfer.sent", None): "transferHold 送出",
-    ("transfer.confirmed", "A2-16"): "memo 已累積",
+    ("decision.applied", "A2-08"): "舊版 Defect 交接 A2-08（目前不使用）",
+    ("decision.applied", "A2-16"): "舊版 SmmHold transfer A2-16（目前不使用）",
+    ("transfer.sent", None): "舊版 transferHold 送出（歷史資料）",
+    ("transfer.confirmed", "A2-16"): "舊版 memo 已累積（歷史資料）",
     ("decision.applied", "A1-09"): "同一命令重試 A1-09",
-    ("decision.applied", "A2-09"): "Defect 未交接 A2-09",
+    ("decision.applied", "A2-09"): "掃完未滿 settle A2-09",
     ("release.intent", None): "Release Intent",
     ("release.sent", None): "送 Release",
     ("release.receipt", None): "Release Receipt",
@@ -423,7 +423,7 @@ def render_case(text: str, lot_id: str, *, order_id: str | None = None) -> str:
             "work_state",
             "control",
             "has_target",
-            "has_defect_hold",
+            "entry_smm_hold_present",
         ):
             if k in facts:
                 parts.append(f"- `{k}` = `{facts[k]!s}`")

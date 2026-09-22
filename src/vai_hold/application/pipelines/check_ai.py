@@ -58,8 +58,6 @@ def run(app: App, params: dict) -> RunResult:
                 continue
             if decision.work_state in {
                 WorkState.WAIT_AI,
-                WorkState.AI_RESULT_INVALID,
-                WorkState.DEFECT_HOLD_UNCONFIRMED,
                 WorkState.PROTECTION_CONFIRMED,
                 WorkState.HOLD_MISSING,
                 WorkState.HOLD_FAILED,

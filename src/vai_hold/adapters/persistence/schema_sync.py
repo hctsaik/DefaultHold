@@ -152,7 +152,7 @@ CREATE VIEW IF NOT EXISTS v_order_errors AS
 SELECT lot_id, work_state, data_error, last_rule_id, lifecycle, state_reason
 FROM hold_order
 WHERE data_error IS NOT NULL
-   OR work_state IN ('DEFECT_HOLD_UNCONFIRMED', 'HOLD_FAILED', 'AI_RESULT_INVALID');
+   OR work_state IN ('HOLD_FAILED', 'RELEASE_FAILED', 'OBSERVATION_UNKNOWN', 'STATE_CONFLICT');
 
 CREATE VIEW IF NOT EXISTS v_wafer_flags AS
 SELECT

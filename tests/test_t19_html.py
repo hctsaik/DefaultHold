@@ -2,9 +2,34 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vai_hold.tools.write_scenario_html import write_all_scenario_html, write_scenario_html
+from vai_hold.tools.write_scenario_html import _business_result, write_all_scenario_html, write_scenario_html
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_system_level_business_results_are_explicit():
+    cases = [
+        (
+            {"incidents": ["COVERAGE_MISMATCH"], "control_mode": "ENABLED"},
+            "覆蓋率不一致告警目前為 OPEN",
+        ),
+        (
+            {"incidents": ["ORPHAN_HOLD"], "control_mode": "ENABLED"},
+            "Orphan Hold 仍保留",
+        ),
+        (
+            {"incidents": ["RESUME_DENIED"], "control_mode": "DISABLED_NEW_HOLD"},
+            "目前仍禁止建立新 Default Hold",
+        ),
+        (
+            {"incidents": [], "control_mode": "ENABLED", "last_function": "resume"},
+            "目前允許建立新 Default Hold",
+        ),
+    ]
+    for actual, expected in cases:
+        _did, current = _business_result(actual)
+        assert expected in current
+        assert current != "目前停在 。"
 
 
 def test_t19_html_shows_hold_missing_facts():
@@ -29,6 +54,11 @@ def test_scenario_index_links_every_catalog_case():
     assert "C01" in text and "C08" in text and "HOLD_RETRY3" in text
     assert "offline" in text or "D12" in text
     assert "generated/evidence/C08.html" in text
+    assert "目前停在 。" not in text
+    assert "覆蓋率不一致告警目前為 OPEN" in text
+    assert "Orphan Hold 仍保留" in text
+    assert "目前仍禁止建立新 Default Hold" in text
+    assert "目前允許建立新 Default Hold" in text
     ev = ROOT / "Design" / "generated" / "evidence" / "index.html"
     assert ev.exists()
     body = ev.read_text(encoding="utf-8")

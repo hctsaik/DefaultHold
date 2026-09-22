@@ -15,6 +15,7 @@ from vai_hold.domain.models import (
     TransportReceipt,
     WaferAiView,
 )
+from vai_hold.domain.timeutil import as_utc
 
 HoldEffect = Literal["create", "none"]
 HoldResponse = Literal[
@@ -51,8 +52,6 @@ class FakeWorld:
     notifier_fail: bool = False
     set_hold_calls: list[HoldCommand] = field(default_factory=list)
     release_calls: list[HoldCommand] = field(default_factory=list)
-    transfer_calls: list[tuple[HoldCommand, str]] = field(default_factory=list)
-    transfer_response: dict[str, HoldResponse] = field(default_factory=dict)
     network_calls: int = 0
     late_commit: dict[str, Callable[[], None]] = field(default_factory=dict)
     seen_idempotency: set[str] = field(default_factory=set)
@@ -299,55 +298,6 @@ class FakeHoldPort:
             self.world.seen_idempotency.add(cmd.idempotency_key)
         return TransportReceipt(outcome=ReceiptOutcome.ACCEPTED, started_at=now, finished_at=now)
 
-    def transfer_hold(self, cmd: HoldCommand, new_memo: str) -> TransportReceipt:
-        self.world.network_calls += 1
-        self.world.transfer_calls.append((cmd, new_memo))
-        now = self.world.clock.now()
-        response = self.world.transfer_response.get(cmd.lot_id, "accepted")
-        if response == "rejected_permission":
-            return TransportReceipt(
-                outcome=ReceiptOutcome.REJECTED,
-                started_at=now,
-                finished_at=now,
-                normalized_error="PERMISSION",
-                retry_class="PERMISSION",
-            )
-        if response == "rejected_transient":
-            return TransportReceipt(
-                outcome=ReceiptOutcome.REJECTED,
-                started_at=now,
-                finished_at=now,
-                normalized_error="TRANSIENT",
-                retry_class="TRANSIENT",
-            )
-        idx = next(
-            (
-                i
-                for i, h in enumerate(self.world.holds)
-                if h.lot_id == cmd.lot_id
-                and h.route_id == cmd.route_id
-                and h.ope_no == cmd.ope_no
-                and h.hold_code == cmd.hold_code
-                and h.hold_user == cmd.hold_user
-                and h.memo == cmd.memo
-            ),
-            None,
-        )
-        if idx is None:
-            return TransportReceipt(
-                outcome=ReceiptOutcome.REJECTED,
-                started_at=now,
-                finished_at=now,
-                normalized_error="NOT_FOUND",
-                retry_class="PERMISSION",
-            )
-        if response == "timeout":
-            if self.world.set_effect.get(f"transfer:{cmd.lot_id}", "create") == "create":
-                self.world.holds[idx].memo = new_memo
-            return TransportReceipt(outcome=ReceiptOutcome.UNKNOWN, started_at=now, finished_at=now)
-        self.world.holds[idx].memo = new_memo
-        return TransportReceipt(outcome=ReceiptOutcome.ACCEPTED, started_at=now, finished_at=now)
-
     def release_hold(self, cmd: HoldCommand) -> TransportReceipt:
         self.world.network_calls += 1
         self.world.release_calls.append(cmd)
@@ -458,16 +408,30 @@ class FakeSmmPort:
     def __init__(self, world: FakeWorld) -> None:
         self.world = world
 
-    def list_start_events(self, after_event_id: str | None) -> list[InboundEvent]:
+    def list_start_events(
+        self, after_event_id: str | None, *, since: datetime | None = None
+    ) -> list[InboundEvent]:
         evs = list(self.world.events)
+        if since is not None:
+            cutoff = as_utc(since)
+            evs = [
+                e
+                for e in evs
+                if as_utc(e.event_time or e.created_at or e.observed_at) >= cutoff
+            ]
         if after_event_id:
             ids = [e.source_event_id for e in evs]
             if after_event_id in ids:
                 evs = evs[ids.index(after_event_id) + 1 :]
         return evs
 
-    def expected_keys(self) -> list[tuple[str, str, int]]:
-        return [(lot.lot_id, lot.origin_ope_no, lot.rework_count) for lot in self.world.lots.values()]
+    def expected_keys(self, *, since: datetime | None = None) -> list[tuple[str, str, int]]:
+        keys = {
+            (e.lot_id, e.origin_ope_no, e.rework_count)
+            for e in self.list_start_events(None, since=since)
+            if e.origin_ope_no is not None and e.rework_count is not None
+        }
+        return sorted(keys)
 
 
 class FakeNotifier:

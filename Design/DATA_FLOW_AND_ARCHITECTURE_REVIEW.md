@@ -4,6 +4,8 @@
 範圍：Operation Start、Order／Wafer、來源觀察、Decision、MES Command、查驗、Defense、Outbox、排程與恢復。  
 方法：靜態閱讀目前本機程式與既有設計。現場已定：多台、進站紀錄夠久、MES 同一鑰匙一次、重試同一包、結案離開日常名單。完整 Inbox／全廠對帳仍未做。
 
+> 2026-09-23 更新：候選已限制為 `OperationStartTime` 最近 12 小時並以 keyset 分頁；Release 查驗超過 2 小時會開 Incident；SMM Hold 只作進站分流，所有掃片完成與結案只看 `ScanCompletedTime` 及本系統 Default Hold。下文提到 transfer 或 Defect handoff 的內容是當時架構檢視，不是現行業務 gate。
+
 ## 整體判斷
 
 現有「Cron 驅動、狀態存 DB、先保存 Intent、再呼叫 MES、下輪查驗」方向可以保留。現階段最值得改善的是資料與控制邊界：**如何證明事件沒有漏、命令沒有被兩個執行者同時送、對帳範圍足夠完整，以及程式重啟後仍知道下一步。**

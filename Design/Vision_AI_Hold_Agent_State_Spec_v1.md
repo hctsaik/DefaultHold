@@ -5,6 +5,8 @@
 用途：Agent 1／Agent 2 實作、設計評審、DEV 情境測試與上線驗收。  
 狀態：設計提案；使用者已確認的業務規則予以保留，新增防護與介面契約仍須在實際系統整合時驗證。本文不代表已連線 MES／SMM 或已完成正式系統測試。
 
+> 2026-09-23 規則覆寫：現行實作以 [DEV_BASELINE.md](DEV_BASELINE.md) 為準。掃片完成只看本輪每片都有 `ScanCompletedTime`；Result／Alarm Type 不作 gate，也不偽造 `OK`。SMM Hold 只用於進站時略過 Default Hold，不參與 Release／結案，本 Agent 不送 transfer。本文後續關於 `AI_RESULT_INVALID`、Defect Hold 交接、SMM 持續存在及 transfer 的段落保留為歷史提案，不是現行驗收規則。
+
 ## 1. 設計摘要
 
 每輪工作固定為：讀取實際資料 → 正規化 Facts → 推導 State → 選擇 Action → 記錄意圖 → 執行 Implementation → 記錄結果 → 下一輪重新觀察驗證。
@@ -24,7 +26,7 @@
 | Ownership | 必須比對 Order Table 與 Hold Memo，並識別實際 Hold |
 | Hold 站點 | 按 Config Priority 找 August／Overlay／CDSEM 等；無配置站點時找 Process Type 對應的 Process Tool；配置站點均已通過時 Hold 現在站點 |
 | AI 完成 | 本輪整批 Lot 所有預期 Wafer 都有 Scan Completed Time |
-| 正常解除 | AI 完成且無 Defect，或 AI 完成有 Defect且正式異常 Future Hold 已確認接手 |
+| 正常解除 | 本輪每片都有 `ScanCompletedTime`；Result／Defect／SMM Hold 不作 Release gate |
 | 異常 | Hold 未成功必須記錄原因；確認防守失敗即使一筆也通知線上／Sponsor |
 | Watchdog | 超過 30 分鐘需介入 |
 | Defense | SMM 應防守 Lot 與實際防守比對；系統性逾時可自動停用新 Default Hold |
@@ -37,8 +39,8 @@
 | I01 | 不解除其他系統、其他訂單或其他 Rework 輪次的 Hold。 |
 | I02 | 查詢失敗／資料過舊不等於「沒有 Hold」。 |
 | I03 | Timeout 不等於動作沒有發生；結果未明前不盲目重送或換 Hold Code。 |
-| I04 | 未證明本輪整批 Wafer 完成且結果有效，不自動 Release。 |
-| I05 | 有 Defect 時，未確認有效的正式異常 Hold 接手，不自動 Release。 |
+| I04 | 未證明本輪每片都有 `ScanCompletedTime`，不自動 Release。 |
+| I05 | SMM Hold、Result／Alarm Type 不得成為完成、Release 或結案 gate。 |
 | I06 | API 回覆受理不等於實際效果已完成；結案需重新查驗。 |
 | I07 | 歷史 Exception 不直接決定目前 State；後續成功不抹除歷史錯誤。 |
 | I08 | 同一 Order 的未確定修改命令不並行；重複掃描不產生重複 Order。 |
@@ -180,12 +182,12 @@ Agent 2 從所有未結案 Order／待驗證命令開始查，不是只撈目前
 | A2-03 | 權威來源確認無 Hold；本次設定流程已確定失敗且無可執行備援／錯誤不可恢復 | HOLD_FAILED | open_incident + enqueue_alarm | 即使一筆也通知；記錄未防守風險；不等 30 分鐘 |
 | A2-04 | 曾確認有 Hold，現在沒有；沒有合法 Release 意圖／人工處置 | HOLD_MISSING | 告警、查原因；符合明確修復政策時交 Agent 1 補防守 | 不誤當新單；重 Hold 必須重新確認當前站點 |
 | A2-05 | Hold 存在；本輪 Wafer Roster 未確定或有任何一片 Scan 未完成 | WAIT_AI | 稍後重查；同時執行 Watchdog | 不 Release；空 Roster 不算完成 |
-| A2-06 | Scan 時間都有，但結果缺值、輪次不符或結果資料互相矛盾 | AI_RESULT_INVALID | 保留 Hold、記錄例外並通知 | 不把空結果當 OK |
-| A2-07 | 本輪整批完成，所有結果有效且無 Defect；本 Order Hold 可精確識別 | READY_RELEASE_OK | request_release | 執行前重新驗證 Release Guard；之後必須 verify_release |
-| A2-08 | 本輪整批完成且有 Defect；有效正式異常 Hold 已確認涵蓋本次異常 | READY_RELEASE_HANDOFF | request_release | 只解除本 Order 的預防性 Hold，不碰正式 Defect Hold |
-| A2-09 | 有 Defect；正式 Hold 尚未確認，包含缺少、錯站、錯輪次或來源未知 | DEFECT_HOLD_UNCONFIRMED | 保留防守、立即告警並重查 | 已記錄的正式 Hold Failure 保留其原因；未知不假裝成成功 |
+| A2-06 | **舊版，不再使用** | — | — | Result 缺值原樣保存，不偽造 OK，也不阻止 Release |
+| A2-07 | **舊版，已併入 A2-21** | — | — | 完成只看每片 ScanCompletedTime |
+| A2-08 | **舊版，已併入 A2-21** | — | — | 不再要求 Defect Hold 交接 |
+| A2-09 | 本輪每片已有 ScanCompletedTime，但尚未滿 settle | WAIT_AI | 稍後重查 | 不看 Result／SMM Hold |
 | A2-10 | 已送 Release 命令，尚未確認結果或發生 Timeout | RELEASE_VERIFY_PENDING | verify_release | 查該 Hold ID／Token 的效果，不直接結案、不重建 Hold |
-| A2-11 | 正確 Release 命令可追溯；權威證據確認本 Order 所有應解除 Hold 均已解除；有 Defect 時正式保護仍有效 | CLOSED | 保存結案原因與確認時間 | 外部其他 Hold 不影響本 Order 的正常結案，不得順便解除 |
+| A2-11 | 正確 Release 命令可追溯；權威證據確認本 Order 的 Default Hold 已解除 | CLOSED | 保存結案原因與確認時間 | 不查、不解、不改 SMM Hold |
 | A2-12 | Release 明確失敗，Hold 仍在 | RELEASE_FAILED | 立即留 Error／告警；僅按策略重試 | 不等 30 分鐘才記錄；Watchdog 獨立運作 |
 | A2-13 | 有經授權的人工處置及 MES 解除證據 | MANUAL_CLOSED 或待人工確認 | 記錄操作者、原因、批准人與風險處置 | 不能標成 AI_OK；不憑 Hold 消失推定已人工批准 |
 | A2-14 | 必要 Hold／Order 查詢失敗或來源不足以證明不存在 | OBSERVATION_UNKNOWN | 依來源重試與告警 | 不 Release；不將未知轉成 ABSENT；可執行不依賴失敗資料的其他安全工作 |
@@ -241,7 +243,7 @@ Agent 2 從所有未結案 Order／待驗證命令開始查，不是只撈目前
 | G01 Ownership | 欲解除的每筆 Hold 都精確屬於本 Order |
 | G02 Cycle | 當前資料仍是同一 Operation／Rework／Visit |
 | G03 Completion | 本輪整批 AI 已完成且結果有效 |
-| G04 Quality | 無 Defect；或正式異常 Hold 已有效接手且涵蓋範圍正確 |
+| G04 Quality | 本輪每片都有 `ScanCompletedTime`；Result／SMM Hold 不作 gate |
 | G05 No conflict | 無未解的修改命令、人工接管衝突或阻止 Release 的 Incident |
 | G06 Freshness | 本次必要證據仍符合新鮮度／版本契約 |
 | G07 Precision | Release 介面可以精確指定本系統 Hold，不會解除別人的 Hold |
@@ -269,7 +271,7 @@ Default Hold 已停用不應單獨阻止符合以上條件的既有 Order 安全
 | request_hold | Order ID、Target、Code、Memo、Command ID | 重驗 Guard、持久化意圖、呼叫、記錄 Receipt | MesGateway.set_hold |
 | verify_hold | Order ID、Command、Hold Token | 查所有相關 Hold、Ownership 與效果 | MesGateway.list_holds／transaction_status |
 | check_ai_completion | 本輪 Roster、AI Observation | 集合覆蓋、結果／輪次檢查 | AiGateway.read_results |
-| check_defect_hold | Order、Defect Coverage | 確認正式異常 Hold 接手 | MesGateway 查詢 |
+| check_defect_hold | **舊版入口，現行不使用** | — | — |
 | request_release | 精確 Hold Binding、Command ID | 重驗 Release Guard、記錄意圖與 Receipt | MesGateway.release_hold |
 | verify_release | Release Command、Hold Binding | 確認解除與正式保護；保存結案證據 | MesGateway 查詢 |
 | raise_alarm | Incident、Order、Severity | 去重、持久化 Outbox | NotificationGateway |
@@ -461,10 +463,10 @@ Fake World 是有狀態的模擬外部世界，至少含 Mes、AI、Order Reposi
 | T09 | 25 片只有 24 片完成 | WAIT_AI | Release；A2-05 |
 | T10 | Log 25 筆但有一片重複、一片缺少 | WAIT_AI、列出缺少 Wafer | 用列數判完成；A2-05 |
 | T11 | 空 Roster／Roster 尚未確定 | WAIT_AI／資料異常 | all(empty)=true 被誤用；A2-05 |
-| T12 | Completed Time 全有但某片 Result 缺值 | AI_RESULT_INVALID | 當 No Defect；A2-06 |
+| T12 | Completed Time 全有但某片 Result 缺值 | 正常進入 Release；保留空 Result 與缺值旗標 | 偽造 OK 或阻止 Release |
 | T13 | Rework 1 只有 Rework 0 的完成資料 | 等待本輪 AI，建立本輪防守 | 套用舊結果／舊 Hold；I01/I04 |
-| T14 | 有 Defect且正式 Future Hold 有效 | 只解除預防性 Hold | 解除正式 Defect Hold；A2-08 |
-| T15 | 有 Defect但正式 Hold 未設／錯站／錯輪次 | 保留防守、告警 | 自動 Release；A2-09 |
+| T14 | 有 Defect且現場有 SMM Hold | 掃完後只解除預防性 Default Hold；SMM 不動 | 解除或修改 SMM Hold |
+| T15 | 有 Defect但沒有 SMM Hold | 掃完且滿 settle 後正常 Release | 因缺 SMM Hold 阻止 Release |
 | T16 | Release 生效但回覆 Timeout | 查驗後 CLOSED | 看到無 Hold 又建立 Hold；A2-10/11 |
 | T17 | Release 明確失敗、Hold 仍在 | RELEASE_FAILED、保留防守與告警 | 直接 CLOSED；A2-12 |
 | T18 | 他人 ENHL、Memo 不同 | 不視為本 Order Hold | 解除或冒領；I01 |

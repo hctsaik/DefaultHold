@@ -155,10 +155,15 @@ def test_control_survives_new_uow(factory):
         assert c.mode == ControlMode.ENABLED
         c.mode = ControlMode.DISABLED_NEW_HOLD
         c.disable_reason = "test"
+        c.resume_evidence_ref = "ticket-123"
+        c.health_check_ref = "health-ok"
         uow.control.save(c, c.control_version)
         uow.commit()
     with factory.new() as uow:
-        assert uow.control.get("DEFAULT").mode == ControlMode.DISABLED_NEW_HOLD
+        saved = uow.control.get("DEFAULT")
+        assert saved.mode == ControlMode.DISABLED_NEW_HOLD
+        assert saved.resume_evidence_ref == "ticket-123"
+        assert saved.health_check_ref == "health-ok"
 
 
 def test_oracle_stub_fail_fast():

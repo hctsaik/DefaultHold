@@ -1,41 +1,41 @@
 # rule_id / event → file:function:line
 
 ## `A1-01`
-- `vai_hold/domain/derive.py:derive_state:78`
-- `vai_hold/application/pipelines/set_default_hold.py:run:58`
+- `vai_hold/domain/derive.py:derive_state:77`
+- `vai_hold/application/pipelines/set_default_hold.py:run:65`
 
 ## `A1-02`
-- `vai_hold/domain/derive.py:derive_state:458`
-- `vai_hold/domain/derive.py:derive_state:475`
+- `vai_hold/domain/derive.py:derive_state:443`
+- `vai_hold/domain/derive.py:derive_state:460`
 
 ## `A1-03`
-- `vai_hold/domain/derive.py:derive_state:486`
+- `vai_hold/domain/derive.py:derive_state:471`
 
 ## `A1-04`
-- `vai_hold/domain/derive.py:derive_state:403`
+- `vai_hold/domain/derive.py:derive_state:388`
 
 ## `A1-06`
-- `vai_hold/domain/derive.py:derive_state:127`
+- `vai_hold/domain/derive.py:derive_state:126`
 
 ## `A1-07`
-- `vai_hold/domain/derive.py:derive_state:88`
-- `vai_hold/domain/derive.py:derive_state:436`
-- `vai_hold/domain/derive.py:derive_state:447`
-- `vai_hold/application/pipelines/set_default_hold.py:run:39`
-- `vai_hold/application/pipelines/set_default_hold.py:run:44`
+- `vai_hold/domain/derive.py:derive_state:87`
+- `vai_hold/domain/derive.py:derive_state:421`
+- `vai_hold/domain/derive.py:derive_state:432`
+- `vai_hold/application/pipelines/set_default_hold.py:run:46`
+- `vai_hold/application/pipelines/set_default_hold.py:run:51`
 
 ## `A1-08`
-- `vai_hold/domain/derive.py:derive_state:425`
+- `vai_hold/domain/derive.py:derive_state:410`
 - `vai_hold/application/pipelines/control.py:run_resume:24`
 
 ## `A1-09`
-- `vai_hold/domain/derive.py:derive_state:177`
-- `vai_hold/domain/derive.py:derive_state:187`
+- `vai_hold/domain/derive.py:derive_state:176`
+- `vai_hold/domain/derive.py:derive_state:186`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:84`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:81`
 
 ## `A2-01`
-- `vai_hold/domain/derive.py:derive_state:141`
+- `vai_hold/domain/derive.py:derive_state:140`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:106`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:110`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:103`
@@ -45,97 +45,88 @@
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:66`
 
 ## `A2-03`
-- `vai_hold/domain/derive.py:derive_state:414`
+- `vai_hold/domain/derive.py:derive_state:399`
 
 ## `A2-04`
-- `vai_hold/domain/derive.py:derive_state:360`
+- `vai_hold/domain/derive.py:derive_state:345`
 
 ## `A2-05`
-- `vai_hold/domain/derive.py:derive_state:297`
-- `vai_hold/domain/derive.py:derive_state:309`
-- `vai_hold/application/pipelines/set_default_hold.py:run:81`
-- `vai_hold/application/pipelines/set_default_hold.py:run:82`
-
-## `A2-06`
-- `vai_hold/domain/derive.py:derive_state:276`
-- `vai_hold/domain/derive.py:derive_state:319`
+- `vai_hold/domain/derive.py:derive_state:293`
+- `vai_hold/domain/derive.py:derive_state:305`
+- `vai_hold/application/pipelines/set_default_hold.py:run:88`
+- `vai_hold/application/pipelines/set_default_hold.py:run:89`
 
 ## `A2-09`
-- `vai_hold/domain/derive.py:derive_state:347`
+- `vai_hold/domain/derive.py:derive_state:332`
 
 ## `A2-10`
-- `vai_hold/domain/derive.py:derive_state:153`
+- `vai_hold/application/services.py:maybe_open_release_verify_overdue:379`
+- `vai_hold/domain/derive.py:derive_state:152`
 
 ## `A2-11`
-- `vai_hold/domain/derive.py:derive_state:225`
-- `vai_hold/application/usecases/verify_release.py:verify_release:71`
-- `vai_hold/application/usecases/verify_release.py:verify_release:69`
+- `vai_hold/domain/derive.py:derive_state:224`
+- `vai_hold/application/usecases/verify_release.py:verify_release:80`
+- `vai_hold/application/usecases/verify_release.py:verify_release:77`
 
 ## `A2-12`
-- `vai_hold/domain/derive.py:derive_state:235`
-- `vai_hold/application/usecases/verify_release.py:verify_release:75`
-- `vai_hold/application/usecases/verify_release.py:verify_release:79`
-- `vai_hold/application/usecases/verify_release.py:verify_release:115`
-- `vai_hold/application/usecases/verify_release.py:verify_release:119`
+- `vai_hold/domain/derive.py:derive_state:234`
+- `vai_hold/application/usecases/verify_release.py:verify_release:85`
+- `vai_hold/application/usecases/verify_release.py:verify_release:89`
+- `vai_hold/application/usecases/verify_release.py:verify_release:112`
+- `vai_hold/application/usecases/verify_release.py:verify_release:116`
 
 ## `A2-13`
-- `vai_hold/domain/derive.py:derive_state:98`
+- `vai_hold/domain/derive.py:derive_state:97`
 - `vai_hold/application/pipelines/control.py:run_manual_close:66`
 - `vai_hold/application/pipelines/control.py:run_manual_close:63`
 
 ## `A2-14`
-- `vai_hold/domain/derive.py:derive_state:163`
-- `vai_hold/application/pipelines/defense.py:run:79`
-- `vai_hold/application/pipelines/set_default_hold.py:run:77`
+- `vai_hold/domain/derive.py:derive_state:162`
+- `vai_hold/application/pipelines/defense.py:run:84`
+- `vai_hold/application/pipelines/set_default_hold.py:run:84`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:36`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:40`
 
-## `A2-16`
-- `vai_hold/application/usecases/request_transfer.py:verify_transfer:110`
-
 ## `A2-18`
-- `vai_hold/domain/derive.py:derive_state:373`
-- `vai_hold/application/usecases/request_transfer.py:verify_transfer:128`
+- `vai_hold/domain/derive.py:derive_state:358`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:95`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:99`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:92`
-- `vai_hold/application/usecases/verify_release.py:verify_release:95`
-- `vai_hold/application/usecases/verify_release.py:verify_release:99`
 
 ## `A2-20`
-- `vai_hold/domain/derive.py:derive_state:286`
-- `vai_hold/domain/derive.py:derive_state:264`
+- `vai_hold/domain/derive.py:derive_state:282`
+- `vai_hold/domain/derive.py:derive_state:270`
 
 ## `A2-21`
-- `vai_hold/domain/derive.py:derive_state:339`
+- `vai_hold/domain/derive.py:derive_state:324`
 
 ## `D-01`
-- `vai_hold/application/pipelines/defense.py:run:70`
+- `vai_hold/application/pipelines/defense.py:run:75`
 
 ## `D-02`
-- `vai_hold/application/pipelines/defense.py:run:121`
-- `vai_hold/application/pipelines/defense.py:run:122`
+- `vai_hold/application/pipelines/defense.py:run:128`
+- `vai_hold/application/pipelines/defense.py:run:129`
 
 ## `D-03`
-- `vai_hold/application/pipelines/defense.py:run:107`
+- `vai_hold/application/pipelines/defense.py:run:114`
 
 ## `D-04`
-- `vai_hold/application/pipelines/defense.py:run:96`
-- `vai_hold/application/pipelines/defense.py:run:97`
+- `vai_hold/application/pipelines/defense.py:run:103`
+- `vai_hold/application/pipelines/defense.py:run:104`
 
 ## `D-05`
-- `vai_hold/domain/derive.py:derive_state:118`
-- `vai_hold/application/pipelines/defense.py:run:54`
+- `vai_hold/domain/derive.py:derive_state:117`
+- `vai_hold/application/pipelines/defense.py:run:59`
 
 ## `D-06`
-- `vai_hold/application/pipelines/defense.py:run:33`
-- `vai_hold/application/pipelines/defense.py:run:34`
+- `vai_hold/application/pipelines/defense.py:run:36`
+- `vai_hold/application/pipelines/defense.py:run:37`
 
 ## `event:AGENT_STALL`
-- `vai_hold/application/pipelines/defense.py:run:33`
+- `vai_hold/application/pipelines/defense.py:run:36`
 
 ## `event:CONTROL_DISABLED`
-- `vai_hold/application/pipelines/defense.py:run:121`
+- `vai_hold/application/pipelines/defense.py:run:128`
 
 ## `event:CONTROL_RESUME`
 - `vai_hold/application/pipelines/control.py:run_resume:38`
@@ -144,19 +135,19 @@
 - `vai_hold/application/pipelines/control.py:run_resume:28`
 
 ## `event:DECISION`
-- `vai_hold/application/log.py:emit_decision:417`
+- `vai_hold/application/log.py:emit_decision:419`
 
 ## `event:DISCOVERY_IDENTITY`
-- `vai_hold/application/pipelines/set_default_hold.py:run:44`
+- `vai_hold/application/pipelines/set_default_hold.py:run:51`
 
 ## `event:EVAL`
-- `vai_hold/application/log.py:emit_decision:408`
+- `vai_hold/application/log.py:emit_decision:410`
 
 ## `event:HOLD_CONFIRMED`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:68`
 
 ## `event:HOLD_FAILED`
-- `vai_hold/application/pipelines/set_default_hold.py:run:174`
+- `vai_hold/application/pipelines/set_default_hold.py:run:181`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:99`
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:124`
 
@@ -174,26 +165,26 @@
 - `vai_hold/application/usecases/verify_hold.py:verify_hold:84`
 
 ## `event:INCIDENT_OPENED`
-- `vai_hold/application/services.py:open_incident:277`
+- `vai_hold/application/services.py:open_incident:315`
 
 ## `event:MANUAL_CLOSED`
 - `vai_hold/application/pipelines/control.py:run_manual_close:66`
 
 ## `event:NOTIFY_FAILED`
-- `vai_hold/application/pipelines/defense.py:run:146`
+- `vai_hold/application/pipelines/defense.py:run:153`
 
 ## `event:NOTIFY_SENT`
-- `vai_hold/application/pipelines/defense.py:run:140`
+- `vai_hold/application/pipelines/defense.py:run:147`
 
 ## `event:ORDER_CREATED`
-- `vai_hold/application/pipelines/set_default_hold.py:run:58`
+- `vai_hold/application/pipelines/set_default_hold.py:run:65`
 
 ## `event:ORDER_SKIP_CLAIM`
 - `vai_hold/application/services.py:claim_order:57`
-- `vai_hold/application/pipelines/set_default_hold.py:run:108`
+- `vai_hold/application/pipelines/set_default_hold.py:run:115`
 
 ## `event:ORPHAN_HOLD`
-- `vai_hold/application/pipelines/defense.py:run:96`
+- `vai_hold/application/pipelines/defense.py:run:103`
 
 ## `event:PIPELINE_END`
 - `vai_hold/application/engine.py:run:83`
@@ -203,12 +194,11 @@
 - `vai_hold/application/log.py:pipeline_run:58`
 
 ## `event:RELEASE_CONFIRMED`
-- `vai_hold/application/usecases/verify_release.py:verify_release:71`
+- `vai_hold/application/usecases/verify_release.py:verify_release:80`
 
 ## `event:RELEASE_FAILED`
-- `vai_hold/application/usecases/verify_release.py:verify_release:79`
-- `vai_hold/application/usecases/verify_release.py:verify_release:119`
-- `vai_hold/application/usecases/verify_release.py:verify_release:99`
+- `vai_hold/application/usecases/verify_release.py:verify_release:89`
+- `vai_hold/application/usecases/verify_release.py:verify_release:116`
 
 ## `event:RELEASE_INTENT`
 - `vai_hold/application/usecases/request_release.py:request_release:134`
@@ -221,22 +211,10 @@
 - `vai_hold/application/usecases/request_release.py:request_release:67`
 
 ## `event:ROSTER_CHANGED`
-- `vai_hold/application/pipelines/set_default_hold.py:run:81`
+- `vai_hold/application/pipelines/set_default_hold.py:run:88`
 
 ## `event:SCOPE_SKIP_LOT`
-- `vai_hold/application/services.py:refuse_unscoped_lot:84`
+- `vai_hold/application/services.py:refuse_unscoped_lot:125`
 
 ## `event:STALE_EVENT`
-- `vai_hold/application/pipelines/set_default_hold.py:run:77`
-
-## `event:TRANSFER_CONFIRMED`
-- `vai_hold/application/usecases/request_transfer.py:verify_transfer:110`
-
-## `event:TRANSFER_FAILED`
-- `vai_hold/application/usecases/request_transfer.py:verify_transfer:128`
-
-## `event:TRANSFER_INTENT`
-- `vai_hold/application/usecases/request_transfer.py:request_transfer:87`
-
-## `event:TRANSFER_SENT`
-- `vai_hold/application/usecases/request_transfer.py:_send:151`
+- `vai_hold/application/pipelines/set_default_hold.py:run:84`

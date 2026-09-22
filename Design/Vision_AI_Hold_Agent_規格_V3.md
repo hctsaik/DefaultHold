@@ -4,6 +4,8 @@
 用途：Agent 1、Agent 2、Defense、DEV 模擬與驗收的共同實作依據。  
 狀態：設計基準草案；標示「待確認」的 MES 契約與製程政策，未確認前不得視為正式環境已具備的能力。
 
+> 2026-09-23 規則覆寫：現行實作以 [DEV_BASELINE.md](DEV_BASELINE.md) 為準。掃片完成只看本輪每片都有 `ScanCompletedTime`；Result／Alarm Type 不作 gate，也不偽造 `OK`。SMM Hold 只用於進站時略過 Default Hold，不參與 Release／結案，本 Agent 不送 transfer。本文後續關於 Defect Hold handoff／coverage 的段落保留為歷史設計，不是現行驗收規則。
+
 ## 0. 設計目標與適用範圍
 
 每輪執行遵循：**取得事實 → 推導 State → 產生 Decision → 執行一個 MES 動作 → 下輪重新觀察驗證**。
@@ -25,8 +27,7 @@ Agent 不依賴程式上次執行到哪一行，也不以 Order.status 或 API �
 | Hold User | ABO；不能單靠 Hold User 辨認本系統的 Hold |
 | Ownership | Order Table + Hold Memo + 實際 Hold 識別資料一致 |
 | AI 完成 | 本輪整批 Lot 的所有應處理 Wafer 都有 Scan Completed Time |
-| AI 無 Defect | 可以申請解除本系統的預防性 Hold |
-| AI 有 Defect | 原 AI 系統的異常 Future Hold 已有效建立，才可解除預防性 Hold |
+| AI Result／Defect | 不作完成或 Release gate；只保存來源原值供查案 |
 | 異常紀錄 | 每次動作、每次失敗與時間點均可追溯 |
 | Hold 失敗 | 最終未成功防守，即使一筆也要告警 Sponsor／線上 |
 | Watchdog | 任一筆符合監控條件的預防性 Hold 超過 30 分鐘，線上介入 |
@@ -45,8 +46,8 @@ Agent 不依賴程式上次執行到哪一行，也不以 Order.status 或 API �
 | ID | 規則 |
 |---|---|
 | I01 | 不得解除無法證明屬於該 Order 的 Hold；不得以 ENHL 或 ABO 做廣域解除。 |
-| I02 | 本輪 Expected Wafer 未全部完成有效判斷，不得自動 Release。 |
-| I03 | 有 Defect 時，異常 Hold 必須屬於正確 Lot／本輪執行，涵蓋必要 Wafer，且防守位置仍有效。 |
+| I02 | 本輪 Expected Wafer 未全部具有 `ScanCompletedTime`，不得自動 Release。 |
+| I03 | SMM Hold 只作進站分流，不得作為完成、Release 或結案條件。 |
 | I04 | API Timeout／斷線／觀察資料過舊，不能直接翻譯為「不存在」或「失敗」。 |
 | I05 | 同一邏輯動作尚未排除延遲提交的可能性，不得換 Code 或建立另一筆衝突動作。 |
 | I06 | 每個 MES 外部變更前，先持久化 Action Intent；紀錄建立失敗時不執行變更。 |
@@ -190,18 +191,18 @@ G01 只影響需要該資料的動作。G03 的「未知」可被足夠的權威
 
 正常情況每個 Order 先保護、再判斷，不因 AI 已快速完成而默默新增「跳過 Hold」捷徑。未來若要優化，需另外核准 release/waiver 規則並加入測試。
 
-### 5.3 Agent 2：AI 完成、交接與解除
+### 5.3 Agent 2：Scan 完成與解除
 
 | ID | 實際條件 | Work State | 下一動作 | 完成證據 |
 |---|---|---|---|---|
 | B01 | 自有 Hold 有效，但 Expected Wafer 尚未全部完成 | WAIT_AI | 保留 Hold；下輪重查 | 缺哪幾片要可見；Watchdog 獨立計時 |
-| B02 | 所有完成時間都有值，但至少一片任務失敗／結果無效 | AI_ERROR | 保留 Hold、記錄並告警 | 不把完成時間視為判斷成功；需確認 AI Log 契約 |
-| B03 | 本輪全片完成且結果明確 No Defect | READY_RELEASE | request_release() | API 回傳後仍等待實際 Hold 解除證據 |
-| B04 | 本輪全片完成且有 Defect；正式異常 Hold 已有效接手 | READY_RELEASE_TRANSFER | 只 request_release(自有預防性 Hold) | 正式異常 Hold 不能被此動作解除 |
-| B05 | 本輪全片完成且有 Defect；異常 Hold 缺失／不適用 | DEFECT_HOLD_MISSING | 保留預防性 Hold，立即告警線上／Sponsor | 原 AI 系統或人工處理異常 Hold；此 Agent 不冒充原系統設碼 |
-| B06 | 已送 Release，但結果未知／尚未確認 | RELEASE_VERIFY_PENDING | 查原 Hold record 與必要交接證據 | 不因暫時看不到 Hold 就建立新 Hold |
+| B02 | 所有完成時間都有值，但 Result／Alarm Type 缺值或 INVALID | READY_RELEASE | 保存來源原值與缺值旗標；不偽造 OK | Result 不作 gate |
+| B03 | 本輪全片都有 `ScanCompletedTime`，且有自有 Default Hold | READY_RELEASE | 滿 settle 後 request_release() | API 回傳後仍等待實際 Hold 解除證據 |
+| B04 | 進站已因 SMM Hold 略過 Default Hold，且全片完成 | CLOSED | 直接結案，不等 settle | 不再檢查 SMM 是否仍存在 |
+| B05 | **舊版 Defect handoff，現行不使用** | — | — | SMM 不作 Release gate |
+| B06 | 已送 Release，但結果未知／尚未確認 | RELEASE_VERIFY_PENDING | 查自有 Default Hold | 超過 2 小時開 Incident；不重送 |
 | B07 | Release 已明確被拒絕，自有 Hold 仍在 | RELEASE_FAILED | 記錄、告警；核准可重試錯誤進入排程 | 重試前重新滿足 Release Guard；不等 30 分鐘才第一次通知 |
-| B08 | 對應 Release Intent 存在；權威來源確認所有應解除自有 Hold 已消失；完成／交接條件仍有效 | CLOSED | 記錄 close_reason=OK 或 TRANSFERRED | 留下確認時間、Hold ID、結果版本與證據 |
+| B08 | 對應 Release Intent 存在；權威來源確認自有 Default Hold 已消失 | CLOSED | 記錄 `close_reason=SCAN_COMPLETED` | 不查看 SMM Hold |
 | B09 | 有核准的人工解除／處置證據 | MANUAL_REVIEW / CLOSED | 驗證處置是否足以結案；不足則保持異常 | close_reason=MANUAL，不能標成自動成功 |
 
 Agent 2 必須讀所有未結案 Order（含失敗、等待確認、停用時發現的 Lot），而非只讀「目前有 ENHL」的 Lot。否則根本 Hold 失敗的 Lot 會被漏掉。
@@ -236,7 +237,7 @@ Priority 不能凌駕製程防守邊界。哪個站是最晚安全防守點，�
 
 ```text
 E = authoritative expected wafer ID set for this execution
-C = wafer IDs with valid Scan Completed Time and usable final result for this execution
+C = wafer IDs with non-null Scan Completed Time for this execution
 
 AI_COMPLETE = manifest_valid AND len(E) > 0 AND E is a subset of C
 ```
@@ -249,7 +250,7 @@ Unexpected Wafer、跨 run 紀錄、manifest split/merge/改變或來源漏資�
 
 ### 7.2 每次 Release 前都重新檢查
 
-必須同時滿足：Order 仍可處理、執行輪次與權限正確、精確自有 Hold 身分已知、沒有未知／互斥動作、Expected Manifest 有效且全片完成、結果是明確 No Defect 或有效 Defect Hold 接手、必要觀察足夠即時。
+必須同時滿足：Order 仍可處理、執行輪次與權限正確、精確自有 Default Hold 身分已知、沒有未知／互斥動作、Expected Manifest 有效且每片都有 `ScanCompletedTime`、必要觀察足夠即時。Result／Defect／SMM Hold 不作 gate。
 
 不能用「有任意 Future Hold」通過交接，尤其不能拿自有預防性 Future Hold 當成原系統的異常 Hold。
 

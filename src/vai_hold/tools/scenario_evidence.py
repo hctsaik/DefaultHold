@@ -128,7 +128,6 @@ def run_transfer_retry_transient(make_harness, happy):
     h.world.add_defect_hold("LOT1", memo="Please check #1")
     h.check_ai()
     h.world.scan_wafer("LOT1", "W02", result="DEFECT")
-    h.world.transfer_response["LOT1"] = "rejected_transient"
     for _ in range(5):
         h.check_ai()
     return h

@@ -74,7 +74,7 @@ CLI：`composition/cli.py` → `composition/bootstrap.py` → `App.run`。
 | `release.not_unique` | MES 對到 0 或 ≥2 筆，不解除 | 同上 |
 | `release.confirmed` | 確認已解除並 CLOSED | `usecases/verify_release.py` |
 | `release.failed` | 解除失敗、Hold 仍在 | 同上 |
-| `transfer.intent` / `sent` / `receipt` / `confirmed` / `failed` | SmmHold memo 累積（Please check #1,#2） | `usecases/request_transfer.py` |
+| `transfer.*` | **歷史 log 相容名稱；現行程式不再產生** | 無 writer；HoldPort 無 transfer 介面 |
 | `incident.opened` | Incident + Outbox | `services.open_incident` |
 | `notify.sent` / `notify.failed` | Defense 送信 | `pipelines/defense.py` |
 | `control.disabled` | 第 3 批超時停用新 Hold | `pipelines/defense.py` |
@@ -104,11 +104,10 @@ CLI：`composition/cli.py` → `composition/bootstrap.py` → `App.run`。
 | A2-03 | HOLD_FAILED | `derive.py` | `verify_hold.py` |
 | A2-04 | 線上代解 → `MANUAL_CLOSED` | `derive.py` | `pipelines/confirm_hold.py`（C08；不是 HOLD_MISSING） |
 | A2-05 | WAIT_AI | `derive.py` + `domain/ai_complete.py` | `check_ai.py` |
-| A2-06 | AI 結果無效 | 同上 | `check_ai.py` |
 | A2-09 | 已掃完，未滿 `release.scan_settle_minutes`，暫不解 | `derive.py` | `check_ai.py` |
-| A2-21 | 已掃完且滿 settle，申請解除（SCAN_COMPLETED；OK／NG 同一條） | `derive.py` | `usecases/request_release.py` |
-| A2-20 | 現場已有 SMM Hold，不設 Default Hold | `derive.py` | `set_default_hold.py` |
-| A2-10 | Release 查驗中 | `derive.py` | `usecases/verify_release.py` |
+| A2-21 | 每片有 ScanCompletedTime 且滿 settle，申請解除（Result 不作 gate） | `derive.py` | `usecases/request_release.py` |
+| A2-20 | 進站已有 SMM Hold，不設 Default Hold；之後完成只看 ScanCompletedTime | `derive.py` | `set_default_hold.py`／`check_ai.py` |
+| A2-10 | Release 查驗中；超過 2 小時開 `RELEASE_VERIFY_OVERDUE` | `derive.py` | `usecases/verify_release.py`／`defense.py` |
 | A2-11 | CLOSED | `verify_release.py` | 同上 |
 | A2-12 | RELEASE_FAILED | `verify_release.py` | 同上 |
 | A2-13 | 人工結案 | — | `pipelines/control.py` |
@@ -129,9 +128,10 @@ CLI：`composition/cli.py` → `composition/bootstrap.py` → `App.run`。
 | `DISCOVERY_IDENTITY` | `discovery.identity_unknown` |
 | `HOLD_QUERY_UNKNOWN` / `HOLD_VERIFY_UNKNOWN` | `hold.verify_unknown` |
 | `HOLD_FAILED` | `hold.failed` |
-| `HOLD_MISSING` / `DEFECT_HOLD_UNCONFIRMED` / `AI_RESULT_INVALID` | `incident.opened`（check_ai） |
+| `HOLD_MISSING` / `DEFECT_HOLD_UNCONFIRMED` / `AI_RESULT_INVALID` | 舊資料相容；現行掃片路徑不產生 |
 | `RELEASE_NOT_UNIQUE` | `release.not_unique` |
 | `RELEASE_FAILED` | `release.failed` |
+| `RELEASE_VERIFY_OVERDUE` | Release 查驗嚴格超過設定門檻（預設 120 分鐘） |
 | `HOLD_OVERDUE` | Defense D-01 |
 | `COVERAGE_MISMATCH` | Defense D-03 |
 | `CONTROL_DISABLED` | `control.disabled` |

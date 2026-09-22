@@ -30,10 +30,8 @@ flowchart TB
   A2_12_release_rejected_hold_remains -->|否| A2_20_skip_default_hold_smm_present
   A2_05_ai_incomplete["A2-05 有防守但 AI 未齊"]
   A2_20_skip_default_hold_smm_present -->|否| A2_05_ai_incomplete
-  A2_06_ai_result_invalid["A2-06 AI 結果無效"]
-  A2_05_ai_incomplete -->|否| A2_06_ai_result_invalid
   A2_09_scan_dwell["A2-09 已掃完，等 settle 分鐘"]
-  A2_06_ai_result_invalid -->|否| A2_09_scan_dwell
+  A2_05_ai_incomplete -->|否| A2_09_scan_dwell
   A2_21_scan_completed["A2-21 已掃完且滿 settle，申請解除"]
   A2_09_scan_dwell -->|否| A2_21_scan_completed
   A2_04_line_released_after_confirmed["A2-04 曾確認的 Hold 被線上解掉，視為解除成功"]
@@ -60,6 +58,7 @@ flowchart TB
     A2_02_hold_confirmed["A2-02 MES 對上本系統 Hold"]
     A2_11_release_confirmed["A2-11 MES 已無本系統 Hold → CLOSED"]
     A2_12_release_failed["A2-12 解除被拒"]
+    A2_10_RELEASE_VERIFY_OVERDUE["A2-10 Release 查驗超過 2 小時"]
     D_01_HOLD_OVERDUE["D-01 Hold > 30 分"]
     D_02_control_disabled["D-02 第 3 批超時停用"]
     D_03_COVERAGE_MISMATCH["D-03 應守 vs 實守不一致"]

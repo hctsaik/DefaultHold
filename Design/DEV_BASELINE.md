@@ -1,6 +1,6 @@
 # Vision AI Preventive Hold Agent — 開發基準
 
-日期：2026-09-18  
+日期：2026-09-23
 狀態：**之後實作只認這份**。V1／V3 規格與架構圖是來源，不是第三套互相競爭的完整規格。  
 用途：凍結命名、切第一刀範圍、鎖定 Clean Architecture 與持久化切分。
 
@@ -96,13 +96,14 @@ class HoldCommand:
 class HoldPort(Protocol):
     def set_hold(self, cmd: HoldCommand) -> TransportReceipt: ...
     def release_hold(self, cmd: HoldCommand) -> TransportReceipt: ...  # memo = ReleaseMemo
-    def transfer_hold(self, cmd: HoldCommand, new_memo: str) -> TransportReceipt: ...
     def list_holds(self, lot_id: str) -> SourceResult[list[HoldCommand]]: ...
 ```
 
-本 Agent **不解、不改、不設 SMM Hold**（不送 transferHold）。YAML `smm_hold` 只用來認現場已有的 SMMH／AOA：進站時 Default Hold 站上已有 → **不設** Default Hold（D04）。
+本 Agent **不解、不改、不設 SMM Hold**，HoldPort 也沒有 transfer 介面。YAML `smm_hold` 只用來認進站分流：Default Hold 站上已有 SMMH／AOA → **不設** Default Hold（D04），並把 A2-20 記進 Order DB。之後即使 SMM Hold 消失，也不重新拿它當完成或結案條件。
 
-解 Default Hold 只看「是不是全部掃完」。OK／NG 同一條：未滿 `Max(ScanCompletedTime)+release.scan_settle_minutes` 暫不解；滿了就申請解除，`close_reason=SCAN_COMPLETED`，不留 data_error／告警。settle 分鐘在 config，預設 2。現場沒有結案 GUI：**Hold 解掉就當結案**。
+解 Default Hold 只看「本輪 Expected Wafer 是否每片都有 `ScanCompletedTime`」。`Result`／Alarm Type 只原樣保存，空值不可偽造為 `OK`，也不阻止解除。自有 Default Hold 路徑未滿 `Max(ScanCompletedTime)+release.scan_settle_minutes` 暫不解；滿了就申請解除。進站已走 A2-20 的訂單沒有本系統 Hold 可解，掃完立即 `CLOSED`，不等 settle。所有正常結案都寫 `close_reason=SCAN_COMPLETED`，不看 SMM Hold。
+
+所有候選只讀本輪 `OperationStartTime` 最近 `runtime.candidate_lookback_hours`（預設 12 小時）的資料，按最舊 Order 先處理並以 keyset 分頁，避免固定首批造成飢餓。`RELEASE_VERIFY_PENDING` 嚴格超過 `release.verify_overdue_minutes`（預設 120 分鐘）仍未確認，開 `RELEASE_VERIFY_OVERDUE` Incident；剛好 120 分鐘不開。
 
 狀態沒變的 Cron 不准重寫 Order、不准重印 `eval.cycle`／`incident.opened`。SET 只處理尚未設上的單。
 
@@ -120,9 +121,9 @@ V3 Rule ID（A01、B01、G01）僅作閱讀對照，程式與測試使用 V1 ID�
 |---|---|
 | HELD | `PROTECTION_CONFIRMED` |
 | AI_PROCESSING | `WAIT_AI` |
-| AI_COMPLETED | `READY_RELEASE_OK` 或 `READY_RELEASE_HANDOFF`（看 Defect） |
+| AI_COMPLETED | `READY_RELEASE_OK`（只看每片 `ScanCompletedTime`） |
 | HOLD_STATE_MISMATCH | `HOLD_MISSING` 或 `STATE_CONFLICT`（依證據） |
-| FUTURE_HOLD_FAILED | `DEFECT_HOLD_UNCONFIRMED` |
+| FUTURE_HOLD_FAILED | 舊名，現行流程不使用 |
 | HOLD_TIMEOUT | incident `AI_TIMEOUT`／Watchdog `HOLD_OVERDUE`，不是單一主狀態 |
 | HOLD_VERIRY_PENDING（圖上拼字） | `HOLD_VERIFY_PENDING` |
 
@@ -165,8 +166,8 @@ Receipt（對外呼叫，不是觀察）：`NOT_SENT` / `ACCEPTED` / `REJECTED` 
 | I01 | 不解除無法證明屬於本 Order 的 Hold |
 | I02 | 查詢失敗／過舊 ≠ 沒有 Hold |
 | I03 | Timeout ≠ 沒發生；未明前不重送、不換 Code |
-| I04 | 未證明本輪整批有效完成，不自動 Release |
-| I05 | 有 Defect 且正式異常 Hold 未確認接手，不自動 Release |
+| I04 | 未證明本輪每片都有 `ScanCompletedTime`，不自動 Release |
+| I05 | SMM Hold、AI Result／Alarm Type 不得成為掃片完成、Release 或結案 gate |
 | I06 | API 受理 ≠ 實際完成 |
 | I07 | 跨 Rework 不共用完成證據／Hold／命令 |
 | I08 | 同一 Order 未確定修改命令不並行 |
@@ -343,7 +344,7 @@ Scenario 指定的是 Fake World 的初始事實與副作用，**不得**直接�
 | 權威 Expected Wafer Manifest **port** | 僅建單時 inbound payload；不得用 AI Log 反推；EVAL 不印 MES FirstWaferId |
 | Timeout 後 request／transaction status | HoldPort **無此 API**；維持 UNKNOWN，先 `list_holds` 查驗；log 不假裝有 RequestStatus |
 | Hold Record ID | 契約無此欄；精確解除靠六欄恰好 1 筆；不寫 `mes_hold_record_id` 當已接 MES |
-| 正式 Defect Hold 契約 | 以 YAML `smm_hold` 的 SMMH＋AOA＋站點選項認定，不是 Memo 不像我們 |
+| 進站 SMM Hold 分流 | 以 YAML `smm_hold` 的 SMMH＋AOA＋站點選項認定；只決定是否略過 Default Hold，不作 Release／結案證據 |
 | MES 單片 Operation Start／Complete | 建單只寫 inbound `event_time` 當本輪 Operation Start；沒 FETCH 到的 wafer 時間保持空 |
 
 收口順序（先修說謊，再接正式 MES；不是再加 log 能假裝）：

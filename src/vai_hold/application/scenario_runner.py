@@ -96,8 +96,6 @@ def apply_given(h, given: dict[str, Any]) -> None:
         h.world.list_status.update(world["list_status"])
     if world.get("release_response"):
         h.world.release_response.update(world["release_response"])
-    if world.get("transfer_response"):
-        h.world.transfer_response.update(world["transfer_response"])
     if world.get("notifier_fail"):
         h.world.notifier_fail = True
 
@@ -254,6 +252,17 @@ def run_script(h, script: list[dict[str, Any]]) -> None:
                 from datetime import timedelta
 
                 h.world.events[-1].event_time = h.clock.now() - timedelta(hours=int(step["stale_hours"]))
+        elif op == "remove_event":
+            lot_id = step.get("lot_id")
+            event_id = step.get("event_id")
+            h.world.events = [
+                event
+                for event in h.world.events
+                if not (
+                    (lot_id is None or event.lot_id == lot_id)
+                    and (event_id is None or event.source_event_id == event_id)
+                )
+            ]
         elif op == "disable_control":
             from vai_hold.domain.enums import ControlMode
 
@@ -271,7 +280,7 @@ def run_script(h, script: list[dict[str, Any]]) -> None:
 
 
 def _action_detail(h, facts: dict | None) -> dict | None:
-    """最後一次送到 MES 的那包（Hold／解除／transfer），給查案頁 Decision。"""
+    """最後一次送到 MES 的 Default Hold／解除 payload，給查案頁 Decision。"""
     ope_name = None
     if facts:
         ope_name = (facts.get("Flow") or {}).get("FutureHoldOpeName")
@@ -287,9 +296,6 @@ def _action_detail(h, facts: dict | None) -> dict | None:
             "HoldMemo": memo if memo is not None else cmd.memo,
         }
 
-    if h.world.transfer_calls:
-        cmd, memo = h.world.transfer_calls[-1]
-        return pack(cmd, memo=memo, kind="transfer")
     if h.world.release_calls:
         return pack(h.world.release_calls[-1], kind="release")
     if h.world.set_hold_calls:
@@ -337,6 +343,15 @@ def collect_actual(h, case: ScenarioCase) -> dict[str, Any]:
     hist = []
     if order is not None:
         hist = h.history(lot_id)
+    control = h.control()
+    last_function = next(
+        (
+            str(step.get("fn") or step.get("code") or "")
+            for step in reversed(flatten_script(case.script))
+            if step.get("op") == "run"
+        ),
+        "",
+    )
     return {
         "work_state": None if order is None else order.work_state.value,
         "lifecycle": None if order is None else order.lifecycle.value,
@@ -390,10 +405,28 @@ def collect_actual(h, case: ScenarioCase) -> dict[str, Any]:
             if (a.receipt_outcome and a.receipt_outcome.value in {"REJECTED", "UNKNOWN"})
             or a.normalized_error
         ],
-        "control_mode": h.control().mode.value,
+        "control_mode": control.mode.value,
+        "control": {
+            "mode": control.mode.value,
+            "sponsor_id": control.sponsor_id,
+            "resume_evidence_ref": control.resume_evidence_ref,
+            "health_check_ref": control.health_check_ref,
+        },
+        "last_function": last_function,
         "emails": len(h.world.sent_emails),
         "open_count": h.open_count(),
         "smm_memo": next((x.memo for x in h.world.holds if x.hold_code == "SMMH"), None),
+        "mes_holds": [
+            {
+                "lot_id": hold.lot_id,
+                "route_id": hold.route_id,
+                "ope_no": hold.ope_no,
+                "hold_code": hold.hold_code,
+                "hold_user": hold.hold_user,
+                "memo": hold.memo,
+            }
+            for hold in h.world.holds
+        ],
         "missing_alarm_wafers": missing_alarm,
         "facts": facts,
         "timeline": list(getattr(h, "scenario_timeline", [])),
@@ -427,6 +460,8 @@ def compare(expect: dict[str, Any], actual: dict[str, Any]) -> list[str]:
         diffs.extend(subset_diff(expect["command_count"], actual.get("command_count") or {}, "command_count"))
     if "incidents" in expect:
         diffs.extend(subset_diff(expect["incidents"], actual.get("incidents") or [], "incidents"))
+    if "incident_rows" in expect:
+        diffs.extend(subset_diff(expect["incident_rows"], actual.get("incident_rows") or [], "incident_rows"))
     if "incidents_absent" in expect:
         have = set(actual.get("incidents") or [])
         for name in expect["incidents_absent"]:
@@ -434,6 +469,12 @@ def compare(expect: dict[str, Any], actual: dict[str, Any]) -> list[str]:
                 diffs.append(f"incidents: did not expect {name}")
     if "facts" in expect:
         diffs.extend(subset_diff(expect["facts"], actual.get("facts") or {}, "facts"))
+    if "control" in expect:
+        diffs.extend(subset_diff(expect["control"], actual.get("control") or {}, "control"))
+    if "last_function" in expect:
+        diffs.extend(subset_diff(expect["last_function"], actual.get("last_function"), "last_function"))
+    if "mes_holds" in expect:
+        diffs.extend(subset_diff(expect["mes_holds"], actual.get("mes_holds") or [], "mes_holds"))
     if "missing_alarm_wafers" in expect:
         diffs.extend(
             subset_diff(expect["missing_alarm_wafers"], actual.get("missing_alarm_wafers") or [], "missing_alarm_wafers")

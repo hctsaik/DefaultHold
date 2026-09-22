@@ -3,6 +3,8 @@
 
 runtime:
   mode: DEV                 # DEV | PROD；缺省或拼錯則啟動失敗
+  # 各 Pipeline 只讀最近有業務活動的資料；DAO 以分頁讀完，不把單頁筆數當容量上限。
+  candidate_lookback_hours: 12
 
 # 測試／試跑准許名單：只處理這些 Lot（進站、建單、Hold／Release／Defense）。
 # 空或不寫＝不限制（正式）。不在名單的進站事件不消費，拿掉名單後仍可處理。
@@ -29,6 +31,8 @@ release:
   # 全部掃完後，等 Max(ScanCompletedTime)+N 分鐘再解 Default Hold。
   # OK／NG 同一條路。N=0 ＝掃完立刻解。
   scan_settle_minutes: 2
+  # Release 已送出但超過此時間仍未確認解除：開 Incident、通知，不自動重送。
+  verify_overdue_minutes: 120
 
 # 選站優先序（名稱可改）；程式不得寫死 August → Overlay → CDSEM
 stations:
@@ -47,7 +51,7 @@ smm_hold:
   step: DefaultHoldStep
 
 # 同一 logical action（同一 idempotency_key）含第 1 次最多送 3 次。
-# ENHL→OTHL、memo #1→#1,#2 是新動作，各自再 3 次。timeout 先查驗再重送。
+# ENHL→OTHL 是新動作，各自再 3 次。timeout 先查驗再重送。
 action:
   retry:
     max_attempts: 3

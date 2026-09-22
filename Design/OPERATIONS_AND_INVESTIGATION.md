@@ -28,7 +28,7 @@ python -m vai_hold gen-scenario-html
 | 問 | 先看 |
 |---|---|
 | 為什麼沒 Hold | before_action 的 own_hold／SET；再 `hold.receipt` |
-| 為什麼不解 Default Hold | 最後 before_action 的 A2-09／SmmHold；after 的 `OrderDb.DataError`；該題 `order.db` |
+| 為什麼不解 Default Hold | 最後 before_action 的 A2-05（尚缺 ScanCompletedTime）或 A2-09（未滿 settle）；SMM Hold 不參與解除判斷 |
 | 重試幾次 | 同一 `command_id` 的 `attempt_no`／`attempt_id` |
 | Timeout | receipt UNKNOWN，下一輪 CONFIRM 的 list_holds |
 

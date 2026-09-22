@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING
 
 from vai_hold.application.log import emit, order_fields
 from vai_hold.application.logevents import Event
-from vai_hold.application.services import assign_order, open_incident
+from vai_hold.application.services import (
+    assign_order,
+    maybe_open_release_verify_overdue,
+    open_incident,
+    resolve_order_incident,
+)
 from vai_hold.domain.enums import (
     ActionState,
     ActionType,
@@ -31,6 +36,9 @@ FN = FunctionCode.CONFIRM_RELEASE.value
 
 
 def verify_release(app: App, uow: UnitOfWork, order: HoldOrder, snap: Snapshot, now: datetime) -> None:
+    maybe_open_release_verify_overdue(
+        app, uow, order, snap, now, function_code=FN
+    )
     if snap.hold_query.status in (SourceStatus.UNKNOWN, SourceStatus.STALE):
         if assign_order(order, now, work_state=WorkState.OBSERVATION_UNKNOWN):
             uow.orders.update(order, order.row_version)
@@ -68,10 +76,12 @@ def verify_release(app: App, uow: UnitOfWork, order: HoldOrder, snap: Snapshot, 
             order.close_reason = "SCAN_COMPLETED"
             order.last_rule_id = "A2-11"
             order.updated_at = now
+            resolve_order_incident(uow, order, "RELEASE_VERIFY_OVERDUE", now)
             emit(Event.RELEASE_CONFIRMED, function_code=FN, rule_id="A2-11", extra=order_fields(order))
             uow.orders.update(order, order.row_version)
             return
     if latest and latest.action_state == ActionState.REJECTED:
+        resolve_order_incident(uow, order, "RELEASE_VERIFY_OVERDUE", now)
         open_incident(
             app, uow, itype="RELEASE_FAILED", order=order, reason="rejected",
             now=now, function_code=FN, rule_id="A2-12",
@@ -86,19 +96,6 @@ def verify_release(app: App, uow: UnitOfWork, order: HoldOrder, snap: Snapshot, 
         if own:
             if assign_order(order, now, work_state=WorkState.RELEASE_VERIFY_PENDING):
                 uow.orders.update(order, order.row_version)
-            return
-            latest.action_state = ActionState.REJECTED
-            latest.expected_postcondition = "RETRY_EXHAUSTED"
-            latest.updated_at = now
-            uow.actions.save_command(latest)
-            order.work_state = WorkState.RELEASE_FAILED
-            open_incident(
-                app, uow, itype="RELEASE_FAILED", order=order, reason="retry exhausted",
-                now=now, function_code=FN, rule_id="A2-18",
-            )
-            emit(Event.RELEASE_FAILED, function_code=FN, rule_id="A2-18", extra=order_fields(order))
-            order.updated_at = now
-            uow.orders.update(order, order.row_version)
             return
         if assign_order(order, now, work_state=WorkState.RELEASE_VERIFY_PENDING):
             uow.orders.update(order, order.row_version)

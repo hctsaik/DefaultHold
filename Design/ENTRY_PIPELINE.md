@@ -62,8 +62,8 @@ Lot 主路徑四支；整廠例外與送信合併為 `SMM_EXCEPTION_DEFENSE`（�
 |---|---|---|---|
 | `SET_DEFAULT_HOLD_BY_Operation_Start` | 第一片 Operation Start → 建單並送出預防性 Default Hold | 讀進站事件、唯一建單、選站、送 Hold（含備援換 Code）。系統停用時仍建單／留未防守紀錄，**不**送新 Hold | 不把 API 成功當 Hold 已生效；不看 AI |
 | `CONFIRM_DEFAULT_HOLD_EXISTS` | 確認本系統 Default Hold 真的在 MES | 查實際 Hold、綁定、失敗立即列隊告警 | 結果未明時不重送、不換 Code |
-| `CHECK_AI_SCAN_COMPLETE` | 本輪 AI 是否整批完成；完成且 Guard 通過則**同輪申請解除** Default Hold | 對帳 Wafer 集合與結果；無 Defect 或正式異常 Hold 已接手 → 送精確 Release | 不結案；不碰正式 Defect Hold；AI 未完成則只更新進度 |
-| `CONFIRM_DEFAULT_HOLD_RELEASED` | 確認 Default Hold 已解除後才結案 | 權威來源確認本系統 Hold 已消失，且交接條件仍成立 → CLOSED | 曾確認後 Hold 被線上解掉 → `MANUAL_CLOSED`（C08）。不准再去設 Hold |
+| `CHECK_AI_SCAN_COMPLETE` | 本輪是否每片都有 `ScanCompletedTime`；完成後同輪申請解除 Default Hold | 對帳 Expected Wafer 與 `ScanCompletedTime`；Result／Alarm Type 不作 gate | 不結案；不碰 SMM Hold；未完成只更新進度 |
+| `CONFIRM_DEFAULT_HOLD_RELEASED` | 確認 Default Hold 已解除後才結案 | 權威來源確認本系統 Hold 已消失 → CLOSED；不查 SMM Hold | 曾確認後 Hold 被線上解掉 → `MANUAL_CLOSED`（C08）。不准再去設 Hold |
 | `SMM_EXCEPTION_DEFENSE` | 整廠例外監看，並把已列隊告警送出 | Watchdog、覆蓋缺口、停用新 Hold、掃 Outbox 送信 | 不代替主路徑去設／解 Hold |
 
 人工／例外（不進每分鐘 Cron）：
@@ -132,23 +132,21 @@ CONFIRM_DEFAULT_HOLD_EXISTS
   3. 未明不得換 Code、不得重送
 
 CHECK_AI_SCAN_COMPLETE
-  1. 找出已確認 Default Hold、尚未結案的訂單
+  1. 從最近 12 小時、最舊優先的 OPEN 訂單找待掃片項目
   2. 對每一筆：
-       核對本輪 Expected Wafer 與 Scan／結果
+       核對本輪 Expected Wafer 與 ScanCompletedTime
        未完成 → 只更新缺片，結束（Watchdog 由 DEFENSE 計時）
-       結果無效 → 保留 Hold、列隊告警
-       有 Defect 且正式異常 Hold 未接手 → 保留 Hold、列隊告警
-       已有 SmmHold 但 memo 未涵蓋已知 Defect slot
-         → transferHold 累積 Please check #1,#2（同 Code/User，只改 Memo）
-       無 Defect，或 Defect 且正式 Hold 已接手且 memo 已齊
-         → 同輪重跑 Release Guard → 送出精確解除 Default Hold
-  3. 不 CLOSED；不解除正式 Defect Hold
+       每片完成 → 不看 Result／Alarm Type／SMM Hold
+       有自有 Default Hold → 等 Max(ScanCompletedTime)+settle，再送精確 Release
+       進站已因 SMM Hold 略過 Default Hold → 立即 CLOSED，不等 settle
+  3. 不解除、不修改 SMM Hold
   4. 同一命令含第 1 次最多 3 次；timeout 先查驗再重送
 
 CONFIRM_DEFAULT_HOLD_RELEASED
   1. 找出 RELEASE_VERIFY_PENDING
-  2. 對每一筆：確認本系統 Hold 已消失且交接仍成立 → CLOSED
-  3. 曾確認後 Hold 沒了 → MANUAL_CLOSED（C08），不是 HOLD_MISSING，也不是再去 SET HOLD
+  2. 對每一筆：確認本系統 Hold 已消失 → CLOSED；不查 SMM Hold
+  3. 超過 2 小時仍未確認 → 開 RELEASE_VERIFY_OVERDUE Incident，不重送
+  4. 曾確認後 Hold 沒了 → MANUAL_CLOSED（C08），不是 HOLD_MISSING，也不是再去 SET HOLD
 
 SMM_EXCEPTION_DEFENSE
   1. 比對「應防守」與「實際有效 Default Hold」（含漏建單）

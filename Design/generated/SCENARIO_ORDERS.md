@@ -4,7 +4,7 @@
 
 - 題庫／是否通過：`Design/generated/scenario_catalog.sqlite` 的 `scenario_run`
 - 本目錄：`C:/code/claude/defaultHold/Design/generated/scenario_orders`
-- 啟用 51 題，通過 51，失敗 0
+- 啟用 54 題，通過 54，失敗 0
 - 缺檔：無
 
 未跑（enabled=0）：
@@ -64,6 +64,9 @@
 | `XFER_RETRY3` | 本 Agent 不送 transferHold | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/XFER_RETRY3/order.db` | `Design/generated/evidence/XFER_RETRY3.html` |
 | `T18b` | 別人的 ENHL 不是我們的，自己的 ENHL 設不上就試 OTHL | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T18b/order.db` | `Design/generated/evidence/T18b.html` |
 | `T34b` | Resume 有 sponsor | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/T34b/order.db` | `Design/generated/evidence/T34b.html` |
+| `REL_OVERDUE_2H` | Release 查驗超過 2 小時開 Incident | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/REL_OVERDUE_2H/order.db` | `Design/generated/evidence/REL_OVERDUE_2H.html` |
+| `LOOKBACK_12H` | 只讀最近 12 小時 Operation Start | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/LOOKBACK_12H/order.db` | `Design/generated/evidence/LOOKBACK_12H.html` |
+| `SMM_SCAN_COMPLETE` | 已有 SMM Hold；掃完立即結案 | 通過 | `C:/code/claude/defaultHold/Design/generated/scenario_orders/SMM_SCAN_COMPLETE/order.db` | `Design/generated/evidence/SMM_SCAN_COMPLETE.html` |
 
 題庫 `scenario_catalog.sqlite` **沒有** hold_order。查 C09 請開該題 `order.db`：
 

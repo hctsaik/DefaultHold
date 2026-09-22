@@ -1,8 +1,8 @@
 # 測試情境待討論清單
 
-日期：2026-09-19  
+日期：2026-09-23
 目的：整理閱讀規格、情境頁與相關程式後，值得一起討論的規則邊界及測試缺口。  
-狀態：討論稿；以下建議不代表已決議，也沒有因此修改業務程式或重跑測試。
+狀態：討論稿；文末「討論紀錄」是已決議規則。2026-09-23 已同步 SMM／ScanCompletedTime、12 小時候選窗及 Release 查驗 2 小時告警。
 
 ## 閱讀這份文件的方式
 
@@ -23,8 +23,8 @@
 | 1 | D01：Hold 消失與 LINE_RELEASED | 直接決定是否結案，以及是否繼續追蹤未完成 AI |
 | 2 | D02：Timeout 後查無 Hold | 決定可否重送，涉及晚到的第一次請求 |
 | 3 | D03：跨 Rework／外人 Hold 的精確識別 | 決定是否可能認錯或解錯 Hold |
-| 4 | D04／D05：Defect 接手、Release 重試與結案 | 決定什麼證據足以解除預防性防守 |
-| 5 | D06：Wafer slot 與 memo 更新 | 決定現場看到的缺陷片號是否正確、完整 |
+| 4 | D04／D05：SMM 進站分流、ScanCompletedTime 與結案 | 已決議；確認程式、文件、測試一致 |
+| 5 | D06：SMM Memo／transfer | 已決議不由本 Agent 更新；保留負向測試 |
 | 6 | D07–D11：移站、人工處置、停復用、資料版本、通知 | 補齊例外流程與責任邊界 |
 | 7 | D12：測試與報告的可信範圍 | 避免「通過」被理解成比實際更廣的保證 |
 
@@ -95,68 +95,24 @@ OrderKey 含 Rework，但 MES 命令沒有 Rework／Hold Record ID；標準 Memo
 
 **建議補測**：同 Lot 兩輪相同站與碼、兩張 OPEN Order 對到同一實體 Hold、外人相同 Code／User 不同 Memo 並存後執行 Release。
 
-## D04 — T14／T15：正式 Defect Hold 什麼時候算接手成功？
+## D04 — SMM Hold 的唯一作用（已決議）
 
-**目前證據**
+SMMH／AOA／設定站點只在進站時決定「已有 SMM Hold，因此不再設 Default Hold」。A2-20 會寫入 Order DB，後續即使 SMM Hold 消失，仍依這個已記錄的分流繼續等掃片。
 
-[is_smm_hold](../src/vai_hold/domain/ownership.py) 檢查 Lot、Code、User、站點；這個函式沒有比對 Route、Rework 或缺陷片涵蓋證據。T14 測試證明正常交接會保留 SMMH，T15 主要驗證沒有正式 Hold 時不解除。
+SMM Hold 不證明掃片完成、不作 Release Guard、不作結案 Guard；本 Agent 不設、不解、不改 SMM Hold。
 
-**我不確定的地方**
+## D05 — 掃片完成、Release 與結案（已決議）
 
-同一站上的 SMMH／AOA，可能是上一輪、另一 Route，或只涵蓋部分 Defect 的舊 Hold。另一方面，現場也可能把 SMMH 定義為整批防守，因此不要求逐片對應；這需要明確說明。
+完成條件只有：本輪 Expected Wafer 每片都有 `ScanCompletedTime`。Result／Alarm Type 可為空或 `INVALID`，程式原樣保存，不偽造 `OK`，也不阻止流程。
 
-**需要討論**
+- 有本系統 Default Hold：等 `Max(ScanCompletedTime)+settle`，再申請解除；確認自己的 Hold 消失後 `CLOSED`。
+- 進站已因 SMM Hold 略過 Default Hold：掃完立即 `CLOSED`，不等 settle。
+- Release 查驗與最後結案都不重新查看 SMM Hold。SMM Hold 在送出 Release 後消失，仍可正常結案。
+- `RELEASE_VERIFY_PENDING` 嚴格超過 2 小時開 `RELEASE_VERIFY_OVERDUE` Incident；不因此重送 Release。
 
-- SMMH／AOA／指定站就足夠，還是一定要證明屬於本輪及涵蓋本次 Defect？
-- `DefaultHoldStep` 與 `NextProcessStep` 的正式 Hold，如果 Lot 已經跨過該站，還算有效嗎？
-- `SMM AI DEFECT HOLD` 這種不含片號的 Memo，是否代表整批接手？
+## D06 — SMM Memo／transfer（已決議）
 
-**我的建議**
-
-把「存在」「屬於本次異常」「位置仍可防守」分別定義；MES 若只提供其中一部分，就明載哪些是已確認的業務假設。
-
-**建議補測**：錯 Route、舊 Rework、錯站、已過防守站、只涵蓋部分缺陷片、正式 Hold 查詢 UNKNOWN。
-
-## D05 — T14／T16／REL_RETRY3：重試與最後結案時，Guard 要不要再跑？
-
-**已確認的程式觀察**
-
-[request_release.py](../src/vai_hold/application/usecases/request_release.py) 的首次解除路徑有「匹配恰好一筆」檢查；retry 分支沒有重複同一檢查。[verify_release.py](../src/vai_hold/application/usecases/verify_release.py) 的結案分支以命令與自有 Hold 消失為主，使用 Order 的 AI 狀態決定結案原因，沒有在該分支重新確認 Defect Hold 接手仍有效。這些是局部程式觀察，尚未以新增測試重現完整端到端結果。
-
-具體例子：第一次 Release 被拒後，出現第二筆相同識別 Hold；或送出 Release 後，正式 SMMH 在最後查驗前消失。
-
-另有一個值得核對的組合：Release Timeout，但 Default Hold 已消失、SMMH 還在。列表可能回 `FOUND`；目前 UNKNOWN 命令結案路徑卻要求 `NOT_FOUND`。這與「整張列表為空」和「指定 Default Hold 不在」是否混用有關。
-
-**需要討論**
-
-- 每次重送 Release 是否與第一次一樣，重新驗證 Ownership、唯一性、AI 與交接？
-- Default Hold 已解除、但正式 Hold 也消失，Order 應如何記錄與升級？不能再假裝預防性 Hold 還在。
-- 查驗的 NOT_FOUND 是整批沒有任何 Hold，還是指定的 Default Hold 沒有？
-
-**我的建議**
-
-把每次 Release 都視為需要最新證據的動作；結案時區分「Default Hold 確實解除」與「品質交接仍成立」。補上 Timeout 加 Defect 交接的組合測試。
-
-## D06 — XFER_ACCUM／XFER_RETRY3：Memo 的 #1 真的是實體 slot 1 嗎？
-
-**已確認的程式觀察**
-
-[smm_memo.py](../src/vai_hold/domain/smm_memo.py) 的 `defect_slots` 用 expected wafer 清單的 1-based 位置產生片號；目前測試 W01、W02 的排列剛好與 slot 相同。
-
-具體例子：名單只有 W03、W17，實體 slot 是 3、17。如果以清單位置輸出，就會是 `#1,#2`。
-
-**需要討論**
-
-- Memo 的數字是 cassette slot、Wafer ID 尾碼，還是名單序號？權威 mapping 從哪裡來？
-- AI 同時把 Memo 從 #1 更新成 #1,#3，而 Agent 正在加 #2，如何避免覆蓋 #3？
-- 三次 transfer 失敗後，新增 #3 是否可建立新的 logical action？原失敗如何追蹤？
-- 全片完成但 memo 更新失敗時，是否仍禁止 Release？非片號格式的正式 Memo 如何處理？
-
-**我的建議**
-
-slot 使用明確來源，不依賴列表排序；更新以最新 Memo 合併並查驗結果。MES 是否提供條件式更新尚待確認，不能只靠本機 union 宣稱已消除並行覆蓋。
-
-**建議補測**：稀疏 slot、名單換序、AI／Agent 並行更新、transfer Timeout 已成功、重試耗盡後新增 Defect。
+本 Agent 不更新 SMM Memo，也不送 `transferHold`。現行 HoldPort 已移除 transfer 寫入介面；舊 enum／log 名稱若保留，只為讀取歷史資料，不代表仍有可執行路徑。因此片號合併、Memo 涵蓋範圍、transfer retry 都不再是 Release 條件。
 
 ## D07 — T21–T24：已确认 Hold 不重選，與防守位置失效要怎麼區分？
 
@@ -231,7 +187,7 @@ T24 已確認「Hold 已確認就不重選、不重送」，不應重新把這�
 
 **需要討論**
 
-- T29 要找同數量不同 Key：預期 A/B，實際 A/C。現有 catalog 與同名測試加入 C 後，主要形成數量也不同的缺口，尚未證明「數量相等仍能抓錯」。
+- T29 已修成同數量不同 Key：SMM expected＝B/C，Order DB actual＝A/B，並直接驗證 Incident reason 同時列出 missing C 與 extra A。
 - T30／T31 的 Orphan／結案殘留要由誰認領，修正後如何解除 Incident？標記異常不等於流程已完成。
 - T32 通知 provider 受理、現場收到、有人 ACK，是不同階段；哪一個是本系統要保證的終點？持續失敗多久要升級？
 - T35 是呼叫 Defense 檢查主路徑心跳；若整個程式／主機／DB 都停了，誰在外部發現？
@@ -255,13 +211,24 @@ T24 已確認「Hold 已確認就不重選、不重送」，不應重新把這�
 | T24 | catalog 無移站；單測移站時點不同 | 保留已確認規則，補真正確認後移站 |
 | T26／T27 | catalog 主要涵蓋 >30 與三批；單測有部分邊界 | 清楚標示哪個入口測邊界，另補同 Lot 多 Hold 去重 |
 | T28 | catalog 只看舊單 Release；單測另有新批被阻止 | 整理成可閱讀的完整停用時間序 |
-| T29 | 不是嚴格的同數量不同 Key 反例 | 預期 A/B、實際 A/C，總數固定相同 |
+| T29 | **已補強**：嚴格的同數量不同 Key 反例 | expected B/C、actual A/B；Incident 必須同時列 missing C／extra A |
 | T33 | 有設定／stub 拒絕測試，不等於已證明所有外部網路請求為零 | 另驗缺 Scenario fail-fast 與禁止外部連線的隔離測試 |
 | T35 | Defense 看心跳，不代表整個執行環境故障也能告警 | 外部監控契約與故障演練分開驗證 |
 
 另外，T07、T08、T23、T32、T33 未列入目前 HTML catalog，不代表完全沒有單測。相反地，HTML 列出通過也只表示當時選定的 Expect 通過，不代表完整原規格、真實 MES 或並行邊界都已驗證。
 
 部分頁面的劇本寫「設 Default Hold 第 4／5 次」，實際是在呼叫 Pipeline，MES 次數仍應只有三次。建議顯示成「第 N 次呼叫 Pipeline；實際動作／no-op 另列」，避免工程師誤讀。
+
+### 下一批建議增加／修改的驗證 item（2026-09-23）
+
+| 優先 | 建議 item | 要鎖住的風險 | 目前狀態 |
+|---|---|---|---|
+| P1 | `REL_OVERDUE_RECOVER` | 超過 2 小時開 Incident 後，Hold 消失必須 `CLOSED`、Incident `RESOLVED`，而且 Release 仍只送一次 | 已有單元測試；建議加入可閱讀的 HTML catalog |
+| P1 | `SMM_ENTRY_RESTART` | A2-20 必須跨 SQLite／App 重啟保存；即使 SMM Hold 後來消失，只要每片有 `ScanCompletedTime` 仍直接結案，不送 Hold／Release | 現有測試分別涵蓋 SMM 消失及 SQLite；尚未合成同一個重啟情境 |
+| P1 | `LOOKBACK_12H_BOUNDARY` | 剛好 12 小時與 12 小時加 1 秒的包含／排除邊界，避免時區或比較符號改動造成漏單 | 目前 catalog 只測 13 小時 |
+| P2 | `SQLITE_PAGE_501` | 超過固定 page size、混合新舊與不同狀態時，SQLite keyset 分頁不可漏單、重複或飢餓 | 目前 501 筆測試主要走 Memory backend |
+| P2 | `INCIDENT_IDEMPOTENT` | 重跑 Defense／逾時查驗只能 touch 同一個 Incident，不可重複寄信或建立第二筆 OPEN episode | 建議新增重跑三輪及恢復後再發生的驗證 |
+| 待決議 | `T30_ORPHAN_RECOVERY` | Orphan Hold 經人工處理後，`ORPHAN_HOLD` 應何時、由誰改成 `RESOLVED` | 先確認現場責任與可取得的解除證據，再寫 Expect |
 
 ## 討論紀錄
 
@@ -272,18 +239,21 @@ T24 已確認「Hold 已確認就不重選、不重送」，不應重新把這�
 | D01 | 線上解掉 Default Hold 後，未掃完的片由 **AI 自己再 Hold Lot**；本系統只是沒有 Default Hold。可 `LINE_RELEASED`／Manual 結案，不代追剩餘片。 | 查不到＝Hold 沒了（見 D08） | C08 |
 | D02 | **現場不會雙 Hold**，Timeout 後查無 Hold 的晚到風險不用考慮。 | | 不改契約 |
 | D03 | 撈 Hold／解除必須 **Hold Memo + Hold User + Hold Code** 一致才算同一筆。 | 另用 Binding 的 Lot／Route／Ope | match_our_holds |
-| D04 | **Default Hold 站上有 SMM Hold 就算接手**。 | 不另驗錯輪／錯 Route／已過站／部分片 | C10／C11 |
-| D05 | **結案必須再確認 SMM Hold 仍在**（Defect 交接）。 | AI_OK 無 SMM Hold 不適用 | verify_release |
-| D06 | `#1`＝**Wafer #1**（晶圓編號），不是 roster 第幾片。現場 id `A123456.01`，片號是 `.` 後面的 `01`。 | `A123456.01` → `#1`（`W03` 仍當後備） | smm_memo.wafer_number |
+| D04 | SMM Hold 只決定進站時是否略過 Default Hold；A2-20 要持久化。 | 後續 SMM 消失也不改變分流 | SMM_SCAN_COMPLETE |
+| D05 | 掃片完成、Release 與結案只看每片 `ScanCompletedTime` 及本系統 Default Hold；**不看 SMM Hold**。 | A2-20 路徑掃完直接 CLOSED、不等 settle | T12／C09／SMM_SCAN_COMPLETE |
+| D06 | 本 Agent 不改 SMM Memo、不送 transferHold。 | 舊 enum／log 僅供歷史資料相容 | XFER_ACCUM／XFER_RETRY3（負向保證） |
 | D07 | Lot 移動後，原 Future Hold **不會失效、不用告警**。 | 已確認就不重選（T24） | 不新增移站告警 |
 | D08 | Default Hold **不見** → 當做 **Manual 結案**，寫進訂單表。 | Hold 還在則不走這條 | C08 MANUAL_CLOSED |
 | D09 | Resume／進站：先看有無 SMM Hold；**已有就不用 Default Hold**，但 **Order DB 要留紀錄**。 | | SET skip + state_reason |
 | D10 | 資料版本／STALE 水位與重查 **不用管**。 | | 不實作 watermark |
-| D11 | **告警結案**：比到 Default Hold 站有 SMM Hold，或所有 wafer 已掃完 → `incident` RESOLVED。**寄信成功（outbox SENT）即通知結束**，不等人 ACK。process／主機死了由**你另外的 Alarm 系統**監，本 Agent 不管。 | 不結 STATE_CONFLICT／ORPHAN／AGENT_STALL | maybe_resolve_order_incidents |
+| D11 | **告警結案**：所有 wafer 已有 `ScanCompletedTime` → 該訂單的一般 Incident RESOLVED。**寄信成功（outbox SENT）即通知結束**，不等人 ACK。process／主機死了由**你另外的 Alarm 系統**監，本 Agent 不管。 | 不看 SMM Hold；不結 STATE_CONFLICT／ORPHAN／AGENT_STALL／RELEASE_VERIFY_OVERDUE | maybe_resolve_order_incidents |
 | D12 | 現在 catalog／pytest 只做 **offline 邏輯**；實際上線再用程式對 MES 確認。通過 ≠ 真實 MES 已驗證。 | | 總覽加註 |
 | T25 | **MES 一定能準確回答有沒有 Hold**，UNKNOWN／問不到 **不用考慮**。 | 程式仍可防呆，但不當驗收 | 不適用 |
 | T06 | MES 上 Hold 還在時，下一輪 **CONFIRM 會再對上並確認成功**，不會重送。規格「DB 回寫前中斷」與「重跑不重送」同一結果：以 MES 為準再查一次。 | | T06.html |
 | C09 | 全部掃完（OK／NG 同一條）：等 `Max(ScanCompletedTime) >= release.scan_settle_minutes` 再解 Default Hold。結案原因一律 `SCAN_COMPLETED`。不看、不設、不改 SMM Hold。進站時現場已有 SMM Hold 仍跳過不設 Default Hold（D04）。 | settle 分鐘在 config | C04.html、C09.html |
+| T12 | `ScanCompletedTime` 齊全即完成；Result／Alarm Type 空值原樣保存，不偽造 `OK`，不阻止 Release。 | `missing_alarm_type=true` 供查案 | T12.html |
+| Release 逾時 | `RELEASE_VERIFY_PENDING` **超過** 2 小時開 Incident；剛好 2 小時不開，也不重送。 | 門檻由 `release.verify_overdue_minutes` 設定 | REL_OVERDUE_2H |
+| 候選窗 | 各 Pipeline 只讀 `OperationStartTime` 最近 12 小時候選，最舊優先、keyset 分頁。 | `runtime.candidate_lookback_hours` | LOOKBACK_12H／candidate_window tests |
 | 人工結案 | 現場沒有結案 GUI。**Hold 解掉就當結案**（`MANUAL_CLOSED`／`close_reason=MANUAL`）。 | Hold 還在則不走這條 | C08 |
 | 防無限寫 | 狀態沒變就不 UPDATE Order、不重印 `eval.cycle`／`incident.opened`、不累加 incident count。SET 只處理 `NEED_HOLD`／`NEED_TARGET`／`NEED_BACKUP_HOLD`。 | Cron 心跳 `discovery_cursor` 仍每輪一筆（不是每張單） | tests/test_order_db_export.py |
 | 多台 | **正式會有多台同時跑**。改單／送 MES 前必須搶到 claim；別人租約還沒到期就不能搶。 | 不是靠 Cron 錯開一分鐘 | try_claim + claim_order |

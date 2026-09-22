@@ -78,6 +78,8 @@ CREATE INDEX IF NOT EXISTS idx_hold_order_lot
     ON hold_order (lot_id);
 CREATE INDEX IF NOT EXISTS idx_hold_order_work
     ON hold_order (lifecycle, work_state);
+CREATE INDEX IF NOT EXISTS idx_hold_order_recent
+    ON hold_order (lifecycle, operation_start_at, created_at, order_id);
 
 -- 2. 告警 + 寄信（一告警一封信）
 CREATE TABLE IF NOT EXISTS incident (
@@ -137,6 +139,8 @@ CREATE TABLE IF NOT EXISTS agent_control (
     disabled_at         TEXT,
     sponsor_id          TEXT,
     sponsor_approved_at TEXT,
+    resume_evidence_ref TEXT,
+    health_check_ref    TEXT,
     last_heartbeat_at   TEXT,
     inbound_json        TEXT    NOT NULL DEFAULT '[]',
     updated_at          TEXT    NOT NULL,

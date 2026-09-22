@@ -7,7 +7,7 @@
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
     mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { htmlLabels: true } });
     document.addEventListener("DOMContentLoaded", () => {
-      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘", "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解", "READY_RELEASE_OK": "可以申請解除 Default Hold", "READY_RELEASE_HANDOFF": "已掃完且滿 settle，可解 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
+      const purpose = {"NEED_HOLD": "起點，沒有 Cron／沒有編號。要做事走箭頭 C01（送 Hold）", "NEED_TARGET": "訂單有了，還沒選防守站", "NEED_BACKUP_HOLD": "這個 Code 沒設上，改試清單下一個", "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES", "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold", "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘", "READY_RELEASE_OK": "可以申請解除 Default Hold", "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上", "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗", "RELEASE_FAILED": "解除失敗，Hold 還在", "HOLD_FAILED": "設 Hold 失敗，沒有防守", "HOLD_MISSING": "曾確認的 Hold 不見了（舊規則）", "CLOSED": "本系統 Hold 已解除，訂單結束", "MANUAL_CLOSED": "有人核過的人工結案", "OBSERVATION_UNKNOWN": "Hold 查詢不明，不准當成沒有", "MANUAL_REVIEW": "名單／資料變了，停自動", "STATE_CONFLICT": "已結案卻又出現本系統 Hold", "BLOCKED_BY_CONTROL": "停用新 Hold，這張單不能再設"};
       const applyTips = () => {
         document.querySelectorAll("svg .stateLabel, svg .nodeLabel, svg text").forEach((el) => {
           const t = (el.textContent || "").trim().split(/\s|\n/)[0];
@@ -96,7 +96,7 @@
   </div>
   <div class="verdict pass">結論：與預期相符
     <div class="sub"><strong>實際系統做了：</strong>向 MES 確認 Default Hold 是否存在。</div>
-    <div class="sub"><strong>現在：</strong>Default Hold 已送出，還沒確認它真的在 MES 上。還沒掃片、還沒解除。</div>
+    <div class="sub"><strong>目前結果／狀態：</strong>Default Hold 已送出，還沒確認它真的在 MES 上。還沒掃片、還沒解除。</div>
   </div>
   
   <div class="card">
@@ -104,7 +104,7 @@
     <p class="muted">時間軸，不是「Hold 已經在現場」。有時間＝這一步做過；—＝還沒做。「送出」不是「已確認存在」。黃底＝這題停在這裡。</p>
     
     <table class="milestones"><thead><tr><th>進站</th><th>送出 Default Hold</th><th>確認 Default Hold 存在</th><th>解除 Default Hold</th><th>確認解除 Default Hold</th><th>結案</th></tr></thead>
-    <tbody><tr><td class='hit'>2026-03-18 06:14:37 UTC</td><td class='here'>—</td><td class=''>—</td><td class=''>—</td><td class=''>—</td><td class=''>—</td></tr></tbody></table>
+    <tbody><tr><td class='hit'>2026-03-18 06:14:37 UTC</td><td class='hit here'>2026-03-18 06:16:00 UTC</td><td class=''>—</td><td class=''>—</td><td class=''>—</td><td class=''>—</td></tr></tbody></table>
   </div>
 
   
@@ -193,7 +193,7 @@ flowchart TB
   &quot;set_hold&quot;: 1,
   &quot;release&quot;: 0
 }</pre>
-    <p class="muted">scenario_run 2026-09-21T19:05:12Z</p>
+    <p class="muted">scenario_run 2026-09-22T22:34:43Z</p>
   </details>
   
 </main>

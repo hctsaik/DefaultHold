@@ -15,7 +15,7 @@ def expected_complete(
 ) -> tuple[str, list[str]]:
     """
     Returns (status, missing_or_invalid).
-    status: WAITING | COMPLETE_OK | COMPLETE_DEFECT | INVALID | EMPTY
+    status: WAITING | COMPLETE_OK | COMPLETE_DEFECT | EMPTY
     """
     if not expected_ids:
         return "EMPTY", []
@@ -38,11 +38,7 @@ def expected_complete(
     if missing:
         return "WAITING", missing
 
-    # 有 ScanCompletedTime、沒有 Alarm Type → 先當完成（不當 DEFECT）。INVALID 仍算無效。
-    invalid = [w for w in expected_ids if (by_id[w].result or "").upper() == "INVALID"]
-    if invalid:
-        return "INVALID", invalid
-
+    # 業務完成條件只看每片 ScanCompletedTime；結果只保留作查案事實，不阻擋完成。
     defects = [w for w in expected_ids if (by_id[w].result or "").upper() == "DEFECT"]
     if defects:
         return "COMPLETE_DEFECT", defects

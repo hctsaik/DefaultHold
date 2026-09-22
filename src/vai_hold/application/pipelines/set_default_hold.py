@@ -6,7 +6,14 @@ from typing import TYPE_CHECKING
 from vai_hold.application.ids import new_order_id
 from vai_hold.application.log import emit, emit_decision, order_fields
 from vai_hold.application.logevents import Event
-from vai_hold.application.services import iter_scoped_open_orders, open_incident, persist_projection, snapshot, touch_heartbeat
+from vai_hold.application.services import (
+    iter_scoped_open_orders,
+    open_incident,
+    persist_projection,
+    recent_cutoff,
+    snapshot,
+    touch_heartbeat,
+)
 from vai_hold.application.usecases.request_hold import request_hold
 from vai_hold.domain.derive import derive_state, plan_action
 from vai_hold.domain.enums import BusinessAction, FunctionCode, SourceStatus, WorkState
@@ -31,7 +38,7 @@ def run(app: App, params: dict) -> RunResult:
     now = app.clock.now()
     with app.uow_factory.new() as uow:
         touch_heartbeat(uow, now)
-        events = app.smm.list_start_events(None)
+        events = app.smm.list_start_events(None, since=recent_cutoff(app, now))
         for ev in events:
             if not app.settings.allows_lot(ev.lot_id):
                 continue

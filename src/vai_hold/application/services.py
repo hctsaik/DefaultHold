@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from vai_hold.application.ids import new_id
@@ -10,6 +10,7 @@ from vai_hold.application.logevents import Event
 from vai_hold.domain.derive import Snapshot
 from vai_hold.domain.enums import (
     ActionState,
+    ActionType,
     BindingRole,
     BindingStatus,
     Lifecycle,
@@ -20,6 +21,7 @@ from vai_hold.domain.enums import (
 )
 from vai_hold.domain.ai_complete import expected_complete
 from vai_hold.domain.retry import next_attempt_no, state_after_receipt
+from vai_hold.domain.timeutil import as_utc
 
 _RESOLVE_SKIP = frozenset(
     {
@@ -27,7 +29,7 @@ _RESOLVE_SKIP = frozenset(
         "AGENT_STALL",
         "CONTROL_DISABLED",
         "ORPHAN_HOLD",
-        "DEFECT_HOLD_UNCONFIRMED",  # 掃完無 SMM Hold：告警留著當 Order 錯誤紀錄
+        "RELEASE_VERIFY_OVERDUE",
     }
 )
 from vai_hold.domain.models import (
@@ -48,8 +50,6 @@ if TYPE_CHECKING:
 
 def claim_order(app: App, uow: UnitOfWork, order: HoldOrder, now: datetime) -> HoldOrder | None:
     """多台同時跑時，沒搶到租約就不要改這張單、不要送 MES。"""
-    from datetime import timedelta
-
     until = now + timedelta(minutes=2)
     if not uow.orders.try_claim(
         order.order_id, app.worker_id, until, order.row_version, now=now
@@ -59,22 +59,63 @@ def claim_order(app: App, uow: UnitOfWork, order: HoldOrder, now: datetime) -> H
     return uow.orders.get(order.order_id) or order
 
 
-def iter_scoped_open_orders(app: App, uow: UnitOfWork, limit: int = 500):
-    """Candidate loop：OPEN 且通過 scope.lot_ids。
+def recent_cutoff(app: App, now: datetime | None = None) -> datetime:
+    clock = now or app.clock.now()
+    return clock - timedelta(hours=app.settings.candidate_lookback_hours)
 
-    有名單時多掃一些 OPEN 列，避免 limit 被範圍外訂單占滿、合法 Lot 永遠輪不到。
-    Filter 留在 Application，不推進 DAO。
-    """
-    want = int(limit or 500)
-    scan = 5000 if app.settings.scope_lot_ids else want
-    taken = 0
-    for order in uow.orders.list_open(scan):
-        if not app.settings.allows_lot(order.lot_id):
-            continue
-        yield order
-        taken += 1
-        if taken >= want:
+
+def iter_scoped_open_orders(app: App, uow: UnitOfWork, limit: int = 500):
+    """分頁讀完最近時間窗內的 OPEN Order；limit 是單頁大小，不是總容量。"""
+    page_size = max(1, int(limit or 500))
+    cutoff = recent_cutoff(app)
+    after_created_at = None
+    after_order_id = None
+    while True:
+        page = uow.orders.list_open_since(
+            cutoff,
+            page_size,
+            after_created_at=after_created_at,
+            after_order_id=after_order_id,
+        )
+        if not page:
             return
+        for order in page:
+            if app.settings.allows_lot(order.lot_id):
+                yield order
+        if len(page) < page_size:
+            return
+        last = page[-1]
+        if last.created_at is None:
+            return
+        after_created_at = last.created_at
+        after_order_id = last.order_id
+
+
+def iter_recent_orders(app: App, uow: UnitOfWork, limit: int = 500):
+    """分頁讀完最近時間窗內的 Order，供 Defense 同時檢查 OPEN／CLOSED。"""
+    page_size = max(1, int(limit or 500))
+    cutoff = recent_cutoff(app)
+    after_created_at = None
+    after_order_id = None
+    while True:
+        page = uow.orders.list_all_since(
+            cutoff,
+            page_size,
+            after_created_at=after_created_at,
+            after_order_id=after_order_id,
+        )
+        if not page:
+            return
+        for order in page:
+            if app.settings.allows_lot(order.lot_id):
+                yield order
+        if len(page) < page_size:
+            return
+        last = page[-1]
+        if last.created_at is None:
+            return
+        after_created_at = last.created_at
+        after_order_id = last.order_id
 
 
 def refuse_unscoped_lot(app: App, order: HoldOrder, *, function_code: str) -> bool:
@@ -109,14 +150,16 @@ def snapshot(app: App, uow: UnitOfWork, order: HoldOrder, *, persist_ai: bool = 
             if row is None:
                 continue
             result = (v.result or "").strip() or None
-            if v.scan_completed_at and not result:
-                result = "OK"
             changed = False
             if v.scan_completed_at and row.scan_completed_at != v.scan_completed_at:
                 row.scan_completed_at = v.scan_completed_at
                 changed = True
-            if result and row.ai_result != result:
+            if row.ai_result != result:
                 row.ai_result = result
+                changed = True
+            missing_alarm_type = bool(v.scan_completed_at and not result)
+            if row.missing_alarm_type != missing_alarm_type:
+                row.missing_alarm_type = missing_alarm_type
                 changed = True
             if changed:
                 row.updated_at = now
@@ -141,7 +184,6 @@ def snapshot(app: App, uow: UnitOfWork, order: HoldOrder, *, persist_ai: bool = 
         smm_hold_code=app.settings.smm_hold_code,
         smm_hold_user=app.settings.smm_hold_user,
         smm_hold_step=app.settings.smm_hold_step,
-        smm_memo_template=app.settings.smm_memo_template,
         max_action_attempts=app.settings.max_action_attempts,
         scan_settle_minutes=int(app.settings.scan_settle_minutes),
         now=app.clock.now(),
@@ -300,6 +342,67 @@ def open_incident(
         )
     )
     return saved
+
+
+def maybe_open_release_verify_overdue(
+    app: App,
+    uow: UnitOfWork,
+    order: HoldOrder,
+    snap: Snapshot,
+    now: datetime,
+    *,
+    function_code: str,
+) -> bool:
+    """Release Intent 超過門檻仍未確認時告警；不改主狀態、不重送。"""
+    if order.lifecycle != Lifecycle.OPEN:
+        return False
+    releases = [c for c in snap.commands if c.action_type == ActionType.SET_RELEASE]
+    if not releases:
+        return False
+    latest = releases[-1]
+    if latest.action_state not in {
+        ActionState.PREPARED,
+        ActionState.DISPATCHED,
+        ActionState.ACKNOWLEDGED,
+        ActionState.UNKNOWN,
+    }:
+        return False
+    starts = [
+        b.release_requested_at
+        for b in snap.bindings
+        if b.role == BindingRole.PREVENTIVE and b.release_requested_at is not None
+    ]
+    started_at = min(starts) if starts else latest.created_at
+    threshold = timedelta(minutes=app.settings.release_verify_overdue_minutes)
+    if as_utc(now) - as_utc(started_at) <= threshold:
+        return False
+    open_incident(
+        app,
+        uow,
+        itype="RELEASE_VERIFY_OVERDUE",
+        order=order,
+        reason=(
+            f"release not verified for more than "
+            f"{app.settings.release_verify_overdue_minutes} minutes"
+        ),
+        now=now,
+        function_code=function_code,
+        rule_id="A2-10",
+    )
+    return True
+
+
+def resolve_order_incident(
+    uow: UnitOfWork,
+    order: HoldOrder,
+    incident_type: str,
+    now: datetime,
+    *,
+    actor: str = "vai_hold",
+) -> None:
+    incident = uow.incidents.get_open(order.order_id, incident_type)
+    if incident is not None:
+        uow.incidents.resolve(incident.incident_id, actor, now)
 
 
 def record_receipt(

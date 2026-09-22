@@ -72,6 +72,31 @@ def test_release_timeout_hold_still_visible_is_delay_not_retry(h):
     assert len(h.world.release_calls) == 1
     assert h.order().lifecycle != Lifecycle.CLOSED
     assert h.order().work_state == WorkState.RELEASE_VERIFY_PENDING
+    assert "RELEASE_VERIFY_OVERDUE" not in h.incident_types()
+
+
+def test_release_verify_over_two_hours_opens_incident_then_resolves(h):
+    _happy_until_hold(h)
+    h.world.complete_ai("LOT1")
+    h.settle()
+    h.world.release_response["LOT1"] = "timeout"
+    h.world.set_effect["release:LOT1"] = "none"
+    h.check_ai()
+
+    h.clock.advance(hours=2)
+    h.confirm_release()
+    assert "RELEASE_VERIFY_OVERDUE" not in h.incident_types()
+
+    h.clock.advance(seconds=1)
+    h.confirm_release()
+    assert "RELEASE_VERIFY_OVERDUE" in h.incident_types()
+    assert h.order().work_state == WorkState.RELEASE_VERIFY_PENDING
+    assert len(h.world.release_calls) == 1
+
+    h.world.holds = [x for x in h.world.holds if x.hold_user != h.settings.hold_user]
+    h.confirm_release()
+    assert h.order().lifecycle == Lifecycle.CLOSED
+    assert "RELEASE_VERIFY_OVERDUE" not in h.incident_types()
 
 
 def test_agent_never_sends_transfer_hold(h):
@@ -80,10 +105,8 @@ def test_agent_never_sends_transfer_hold(h):
     h.world.add_defect_hold("LOT1", memo="Please check #1")
     h.check_ai()
     h.world.scan_wafer("LOT1", "W02", result="DEFECT")
-    h.world.transfer_response["LOT1"] = "rejected_transient"
     for _ in range(5):
         h.check_ai()
-    assert h.world.transfer_calls == []
     tr = [c for c in h.commands() if c.action_type.value == "TRANSFER_HOLD"]
     assert tr == []
     smm = [x for x in h.world.holds if x.hold_code == "SMMH"]

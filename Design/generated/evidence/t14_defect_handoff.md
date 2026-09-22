@@ -58,7 +58,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000935-EQP01",
+    "OrderId": "20260101-000000181-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "NEED_HOLD",
     "ProtectionState": "NONE",
@@ -92,7 +92,7 @@
   "unverified_set_hold": false,
   "unverified_release": false,
   "new_hold_allowed": true,
-  "defect_handoff_ready": false
+  "entry_smm_hold_present": false
 }
 ```
 
@@ -140,7 +140,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000935-EQP01",
+    "OrderId": "20260101-000000181-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "HOLD_VERIFY_PENDING",
     "ProtectionState": "SET_PENDING",
@@ -192,7 +192,7 @@
   "unverified_set_hold": true,
   "unverified_release": false,
   "new_hold_allowed": true,
-  "defect_handoff_ready": false
+  "entry_smm_hold_present": false
 }
 ```
 
@@ -247,7 +247,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000935-EQP01",
+    "OrderId": "20260101-000000181-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -298,7 +298,7 @@
   "expected_count": 25,
   "missing_count": 25,
   "new_hold_allowed": true,
-  "defect_handoff_ready": false
+  "entry_smm_hold_present": false
 }
 ```
 
@@ -363,7 +363,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000935-EQP01",
+    "OrderId": "20260101-000000181-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "WAIT_AI",
     "ProtectionState": "CONFIRMED",
@@ -414,7 +414,7 @@
   "expected_count": 25,
   "missing_count": 25,
   "new_hold_allowed": true,
-  "defect_handoff_ready": true
+  "entry_smm_hold_present": true
 }
 ```
 
@@ -470,7 +470,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000935-EQP01",
+    "OrderId": "20260101-000000181-EQP01",
     "Lifecycle": "OPEN",
     "WorkState": "RELEASE_SENT",
     "ProtectionState": "RELEASE_PENDING",
@@ -525,7 +525,7 @@
   "expected_count": 25,
   "missing_count": 25,
   "new_hold_allowed": true,
-  "defect_handoff_ready": true
+  "entry_smm_hold_present": true
 }
 ```
 
@@ -581,7 +581,7 @@
     "FutureHoldOpeName": "August"
   },
   "OrderDb": {
-    "OrderId": "20260101-000000935-EQP01",
+    "OrderId": "20260101-000000181-EQP01",
     "Lifecycle": "CLOSED",
     "WorkState": "CLOSED",
     "ProtectionState": "RELEASED",
@@ -632,7 +632,7 @@
   "expected_count": 25,
   "missing_count": 25,
   "new_hold_allowed": true,
-  "defect_handoff_ready": true
+  "entry_smm_hold_present": true
 }
 ```
 

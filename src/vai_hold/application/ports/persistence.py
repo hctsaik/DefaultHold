@@ -26,6 +26,20 @@ class HoldOrderDao(Protocol):
     def update(self, order: HoldOrder, expected_version: int) -> None: ...
     def list_open(self, limit: int = 500) -> list[HoldOrder]: ...
     def list_all(self, limit: int = 2000) -> list[HoldOrder]: ...
+    def list_open_since(
+        self,
+        since: datetime,
+        limit: int = 500,
+        after_created_at: datetime | None = None,
+        after_order_id: str | None = None,
+    ) -> list[HoldOrder]: ...
+    def list_all_since(
+        self,
+        since: datetime,
+        limit: int = 500,
+        after_created_at: datetime | None = None,
+        after_order_id: str | None = None,
+    ) -> list[HoldOrder]: ...
     def try_claim(
         self,
         order_id: str,

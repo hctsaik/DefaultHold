@@ -57,7 +57,6 @@ class Snapshot:
     smm_hold_code: str = "SMMH"
     smm_hold_user: str = "AOA"
     smm_hold_step: str = "DefaultHoldStep"
-    smm_memo_template: str = "Please check {slots}"
     max_action_attempts: int = 3
     scan_settle_minutes: int = 2
     now: datetime | None = None
@@ -254,7 +253,14 @@ def derive_state(snap: Snapshot) -> Decision:
             ope_no=order.target_hold_ope_no,
         )
     ]
-    if smm_at_dh and not own_holds:
+    # 一旦進站分流已記成 A2-20，後續不再要求 SMM Hold 持續存在。
+    # SMM 只決定「這張單不設 Default Hold」；完成／結案只看本輪每片
+    # ScanCompletedTime。否則 SMM 在掃片期間消失會讓訂單永久卡住。
+    entry_smm_skip = bool(smm_at_dh) or (
+        order.last_rule_id == "A2-20"
+        and order.state_reason == "skip_default_hold_smm_present"
+    )
+    if entry_smm_skip and not own_holds:
         ai_status, missing = expected_complete(
             snap.expected_wafer_ids, snap.ai_views, rework_count=order.rework_count
         )
@@ -271,16 +277,6 @@ def derive_state(snap: Snapshot) -> Decision:
                 business_action=BusinessAction.CHECK_AI,
                 reason="skip_default_hold_smm_present",
                 missing_wafers=missing,
-            )
-        if ai_status == "INVALID":
-            return Decision(
-                rule_id="A2-06",
-                work_state=WorkState.AI_RESULT_INVALID,
-                protection_state=ProtectionState.NONE,
-                ai_state=AiState.INVALID,
-                business_action=BusinessAction.OPEN_INCIDENT,
-                reason="ai_result_invalid",
-                incidents=["AI_RESULT_INVALID"],
             )
         # 現場已有 SMM Hold：不設 Default Hold。掃完即可結案（沒有本系統 Hold 可解）。
         return Decision(
@@ -314,17 +310,6 @@ def derive_state(snap: Snapshot) -> Decision:
                 business_action=BusinessAction.CHECK_AI,
                 reason="ai_incomplete",
                 missing_wafers=missing,
-            )
-        if ai_status == "INVALID":
-            return Decision(
-                rule_id="A2-06",
-                work_state=WorkState.AI_RESULT_INVALID,
-                protection_state=ProtectionState.CONFIRMED,
-                ai_state=AiState.INVALID,
-                business_action=BusinessAction.OPEN_INCIDENT,
-                reason="ai_result_invalid",
-                missing_wafers=missing,
-                incidents=["AI_RESULT_INVALID"],
             )
         ai_state = AiState.COMPLETE_OK if ai_status == "COMPLETE_OK" else AiState.COMPLETE_DEFECT
         clock = snap.now or order.updated_at

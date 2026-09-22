@@ -40,6 +40,8 @@ def is_our_preventive_hold(
     standard_memo: str,
     hold_user: str,
 ) -> bool:
+    # 既有 Hold 的身分以 Intent 當下凍結的 Binding 為準；設定換版不得讓舊 Hold 失聯。
+    del standard_memo, hold_user
     if binding.role != BindingRole.PREVENTIVE:
         return False
     if binding.order_id != order.order_id:
@@ -51,9 +53,8 @@ def is_our_preventive_hold(
         and mes_hold.route_id == binding.route_id
         and mes_hold.ope_no == binding.ope_no
         and mes_hold.hold_code == binding.hold_code
-        and mes_hold.hold_user == binding.hold_user == hold_user
-        and memo_matches(mes_hold.memo, standard_memo)
-        and memo_matches(binding.hold_memo, standard_memo)
+        and mes_hold.hold_user == binding.hold_user
+        and memo_matches(mes_hold.memo, binding.hold_memo)
     )
 
 
@@ -87,6 +88,7 @@ def match_by_binding(
     standard_memo: str,
     hold_user: str,
 ) -> list[HoldCommand]:
+    del standard_memo, hold_user
     out = []
     for hold in mes_holds:
         if (
@@ -94,8 +96,8 @@ def match_by_binding(
             and hold.route_id == binding.route_id
             and hold.ope_no == binding.ope_no
             and hold.hold_code == binding.hold_code
-            and hold.hold_user == binding.hold_user == hold_user
-            and memo_matches(hold.memo, standard_memo)
+            and hold.hold_user == binding.hold_user
+            and memo_matches(hold.memo, binding.hold_memo)
         ):
             out.append(hold)
     return out

@@ -25,6 +25,8 @@ class Settings:
     release_user: str
     release_memo: str
     scan_settle_minutes: int
+    release_verify_overdue_minutes: int
+    candidate_lookback_hours: int
     station_priority: list[str]
     watchdog_minutes: int
     disable_after_overdue_lots: int
@@ -32,7 +34,6 @@ class Settings:
     smm_hold_code: str = "SMMH"
     smm_hold_user: str = "AOA"
     smm_hold_step: str = "DefaultHoldStep"
-    smm_memo_template: str = "Please check {slots}"
     max_action_attempts: int = 3
     policy_version: str = "v1"
     config_version: str = "v1"
@@ -97,6 +98,22 @@ def load_settings(path: str | Path | None = None, overrides: dict | None = None)
         release_user=str(release.get("user") or hold.get("user") or "ABO"),
         release_memo=str(release.get("memo") or DEFAULT_RELEASE_MEMO),
         scan_settle_minutes=max(0, int(release.get("scan_settle_minutes") if release.get("scan_settle_minutes") is not None else 2)),
+        release_verify_overdue_minutes=max(
+            1,
+            int(
+                release.get("verify_overdue_minutes")
+                if release.get("verify_overdue_minutes") is not None
+                else 120
+            ),
+        ),
+        candidate_lookback_hours=max(
+            1,
+            int(
+                runtime.get("candidate_lookback_hours")
+                if runtime.get("candidate_lookback_hours") is not None
+                else 12
+            ),
+        ),
         station_priority=[str(s) for s in (stations.get("priority") or ["August", "Overlay", "CDSEM"])],
         watchdog_minutes=int(defense.get("watchdog_minutes") or 30),
         disable_after_overdue_lots=int(defense.get("disable_new_hold_after_overdue_lots") or 3),
@@ -104,9 +121,6 @@ def load_settings(path: str | Path | None = None, overrides: dict | None = None)
         smm_hold_code=str((data.get("smm_hold") or {}).get("hold_code") or "SMMH"),
         smm_hold_user=str((data.get("smm_hold") or {}).get("hold_user") or "AOA"),
         smm_hold_step=str((data.get("smm_hold") or {}).get("step") or "DefaultHoldStep"),
-        smm_memo_template=str(
-            (data.get("smm_hold") or {}).get("memo_template") or "Please check {slots}"
-        ),
         max_action_attempts=max(1, int(((data.get("action") or {}).get("retry") or {}).get("max_attempts") or 3)),
         scope_lot_ids=scope_lot_ids,
     )

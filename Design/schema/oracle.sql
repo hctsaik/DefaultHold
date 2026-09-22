@@ -73,6 +73,7 @@ CREATE TABLE MV_NXT_DEF_HOLD_ORDER_BT (
 CREATE INDEX idx_hold_order_due ON MV_NXT_DEF_HOLD_ORDER_BT (lifecycle, next_check_at);
 CREATE INDEX idx_hold_order_lot ON MV_NXT_DEF_HOLD_ORDER_BT (lot_id);
 CREATE INDEX idx_hold_order_work ON MV_NXT_DEF_HOLD_ORDER_BT (lifecycle, work_state);
+CREATE INDEX idx_hold_order_recent ON MV_NXT_DEF_HOLD_ORDER_BT (lifecycle, operation_start_at, created_at, order_id);
 
 -- 片／MES retry 在 wafers_json、actions_json。進站去重正式走 PARAM；SQLite 在 agent_control.inbound_json。
 

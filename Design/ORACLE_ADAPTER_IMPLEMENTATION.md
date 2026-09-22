@@ -78,7 +78,7 @@ SQLite／Memory 必須繼續綠。日常測試不連 Oracle。
 | `uow.holds` | 同一張的 `dh_*` | 同一張的 `dh_*` |
 | `uow.incidents` | `incident` | `MV_NXT_DEF_HOLD_INCIDENT_BT` |
 | `uow.outbox` | `incident.mail_*` | 同左 |
-| `uow.control` | `agent_control` 一列 | `MV_NXT_PARAM_BT` |
+| `uow.control` | `agent_control` 一列（含 `resume_evidence_ref`／`health_check_ref`） | `MV_NXT_PARAM_BT`（恢復證據與 health check 也必須持久化） |
 | `uow.wafers` | `hold_order.wafers_json` | 同欄 |
 | `uow.actions` | `hold_order.actions_json` | 同欄 |
 | `uow.inbound` | `agent_control.inbound_json` | PARAM JSON 或等價 |

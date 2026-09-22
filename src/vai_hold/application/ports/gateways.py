@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from vai_hold.domain.models import (
@@ -15,7 +16,6 @@ from vai_hold.domain.models import (
 class HoldPort(Protocol):
     def set_hold(self, cmd: HoldCommand) -> TransportReceipt: ...
     def release_hold(self, cmd: HoldCommand) -> TransportReceipt: ...
-    def transfer_hold(self, cmd: HoldCommand, new_memo: str) -> TransportReceipt: ...
     def list_holds(self, lot_id: str) -> SourceResult: ...
 
 
@@ -28,8 +28,10 @@ class AiPort(Protocol):
 
 
 class SmmPort(Protocol):
-    def list_start_events(self, after_event_id: str | None) -> list[InboundEvent]: ...
-    def expected_keys(self) -> list[tuple[str, str, int]]: ...
+    def list_start_events(
+        self, after_event_id: str | None, *, since: datetime | None = None
+    ) -> list[InboundEvent]: ...
+    def expected_keys(self, *, since: datetime | None = None) -> list[tuple[str, str, int]]: ...
 
 
 class NotifierPort(Protocol):

@@ -71,14 +71,6 @@ RELEASE_RECEIPT = {
     "timeout": "MES 解除無回覆（Receipt UNKNOWN）",
 }
 
-TRANSFER_RECEIPT = {
-    "accepted": "MES 接受改 Memo",
-    "rejected_permission": "MES 拒絕改 Memo：權限不足",
-    "rejected_transient": "MES 暫時拒絕改 Memo",
-    "timeout": "MES 改 Memo 無回覆（Receipt UNKNOWN）",
-}
-
-
 def describe_step(step: dict[str, Any]) -> dict[str, str]:
     op = step.get("op")
     if op == "run":
@@ -107,6 +99,14 @@ def describe_step(step: dict[str, Any]) -> dict[str, str]:
             "loc": "pipelines/set_default_hold.py:run",
             "via": "SmmPort.list_start_events",
             "mes": "",
+            "kind": "env",
+        }
+    if op == "remove_event":
+        return {
+            "title": f"SMM 目前應防守名單移除 {step.get('lot_id') or step.get('event_id') or '指定事件'}",
+            "loc": "SmmPort.expected_keys",
+            "via": "pipelines/defense.py:run",
+            "mes": "只改對帳輸入，不刪既有 Order",
             "kind": "env",
         }
     if op == "set_world":
@@ -223,9 +223,6 @@ def _describe_world(step: dict[str, Any]) -> dict[str, str]:
     for _lot, resp in (step.get("release_response") or {}).items():
         bits.append(RELEASE_RECEIPT.get(str(resp), str(resp)))
         loc = "HoldPort.release_hold"
-    for _lot, resp in (step.get("transfer_response") or {}).items():
-        bits.append(TRANSFER_RECEIPT.get(str(resp), str(resp)))
-        loc = "HoldPort.transfer_hold"
     if step.get("notifier_fail"):
         bits.append("通知通道失敗")
         loc = "NotifierPort.send"

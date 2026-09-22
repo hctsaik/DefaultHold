@@ -62,7 +62,10 @@ SPEC = {
     "HOLD_TIMEOUT_RETRY3": {"situation": "Timeout 且查驗沒落地", "expected": "先查再重送，最多 3 次", "forbidden": "UNKNOWN 就重送或換 Code"},
     "HOLD_UNKNOWN_NO_RESEND": {"situation": "Timeout 後 Hold 查詢仍 UNKNOWN", "expected": "保持查驗、不重送", "forbidden": "UNKNOWN 當 ABSENT 再送一次"},
     "REL_RETRY3": {"situation": "同一 Release 暫時拒絕", "expected": "同一命令最多 3 次、Hold 仍在", "forbidden": "直接 CLOSED"},
-    "REL_TIMEOUT_RETRY3": {"situation": "Release Timeout 且 Hold 還在", "expected": "先查再重送，最多 3 次", "forbidden": "暫時看不到 Hold 就當已解除"},
+    "REL_TIMEOUT_RETRY3": {"situation": "Release Timeout 且 Hold 還在、未滿 2 小時", "expected": "維持查驗、不重送、不告警", "forbidden": "暫時看不到 Hold 就當已解除"},
+    "REL_OVERDUE_2H": {"situation": "Release 已送出超過 2 小時仍未確認", "expected": "RELEASE_VERIFY_OVERDUE Incident；不重送", "forbidden": "永久靜默等待或重送 Release"},
+    "LOOKBACK_12H": {"situation": "Operation Start 已超過 12 小時", "expected": "不進入本輪候選、不建單、不送 Hold", "forbidden": "掃全歷史資料"},
+    "SMM_SCAN_COMPLETE": {"situation": "進站已有 SMM Hold，所有片已有 ScanCompletedTime", "expected": "不設 Default Hold、不等 settle，直接結案", "forbidden": "依 SMM Memo／AI Result 決定或等待 settle"},
     "XFER_ACCUM": {"situation": "第一片 Defect 已有 Lot Hold #1，第二片再 Defect，尚未掃完", "expected": "本 Agent 不改 SMM Memo；Default Hold 先不解", "forbidden": "transferHold 或解 Default Hold"},
     "XFER_RETRY3": {"situation": "現場 SMM Memo 不完整", "expected": "本 Agent 不送 transferHold", "forbidden": "改 SMM Memo"},
 }
@@ -381,8 +384,26 @@ ENG = {
     "REL_TIMEOUT_RETRY3": {
         "given": "已送解除，Timeout，MES 上自己的 Hold 還看得到。",
         "do": "當成 DB Delay：進入查驗格，不重送、不當失敗。",
-        "then": "RELEASE_VERIFY_PENDING；release 仍 1 次。",
+        "then": "未滿 2 小時維持 RELEASE_VERIFY_PENDING；release 仍 1 次；不開逾時告警。",
         "dont": "Delay 就重送或當已解除而 CLOSED。",
+    },
+    "REL_OVERDUE_2H": {
+        "given": "Release 已送出，自己的 Default Hold 仍在，查驗已超過 2 小時。",
+        "do": "保留 RELEASE_VERIFY_PENDING，開 RELEASE_VERIFY_OVERDUE Incident 並列隊通知。",
+        "then": "Incident 可查；Release 仍只送 1 次。",
+        "dont": "靜默永久等待、自動重送、或把 Hold 還在當成已解除。",
+    },
+    "LOOKBACK_12H": {
+        "given": "Operation Start 事件時間已超過最近 12 小時窗口。",
+        "do": "來源查詢以 12 小時 cutoff 過濾。",
+        "then": "不建 Order、不送 Default Hold。",
+        "dont": "每輪掃全歷史資料。",
+    },
+    "SMM_SCAN_COMPLETE": {
+        "given": "進站時 Default Hold 站已有 SMM Hold；每片都有 ScanCompletedTime。",
+        "do": "不設 Default Hold；只依 ScanCompletedTime 判斷完成。",
+        "then": "立即 CLOSED；不送 Hold／Release；不等待 settle。",
+        "dont": "檢查 SMM Memo 或 AI Result，或改動 SMM Hold。",
     },
     "XFER_ACCUM": {
         "given": "第一片 Defect 已有 Lot Hold「Please check #1」；第二片又 Defect；還沒全部掃完。",
@@ -560,6 +581,7 @@ def seed_cases() -> list[ScenarioCase]:
             {"op": "run", "fn": "check"},
         ], {
             "work_state": "RELEASE_SENT",
+            "missing_alarm_wafers": ["W03"],
         }, n=12),
         _s("T13", "order", "Rework 隔離", [
             {"op": "add_lot", "lot_id": "LOT1", "rework_count": 0},
@@ -732,13 +754,29 @@ def seed_cases() -> list[ScenarioCase]:
             {"op": "add_lot", "lot_id": "B"},
             {"op": "run", "fn": "set"},
             {"op": "run", "fn": "confirm"},
+            {"op": "remove_event", "lot_id": "A"},
             {"op": "add_lot", "lot_id": "C", "event_id": "evt-c"},
             {"op": "run", "fn": "defense"},
-        ], {"incidents": ["COVERAGE_MISMATCH"]}, n=29),
+        ], {
+            "incidents": ["COVERAGE_MISMATCH"],
+            "incident_rows": [{
+                "incident_type": "COVERAGE_MISMATCH",
+                "status": "OPEN",
+                "reason": "missing=[('C', 'OP100', 0)] extra=[('A', 'OP100', 0)]",
+            }],
+            "open_count": 2,
+            "last_function": "defense",
+        }, n=29),
         _s("T30", "defense", "Orphan Hold 不自動解", [
             {"op": "add_lot", "lot_id": "ORPH"},
             {"op": "run", "fn": "defense"},
-        ], {"incidents": ["ORPHAN_HOLD"]}, given={
+        ], {
+            "incidents": ["ORPHAN_HOLD"],
+            "incident_rows": [{"incident_type": "ORPHAN_HOLD", "status": "OPEN"}],
+            "actions": {"release": 0},
+            "mes_holds": [{"lot_id": "ORPH", "ope_no": "OP200", "hold_code": "ENHL", "hold_user": "ABO"}],
+            "last_function": "defense",
+        }, given={
             "holds": [{"lot_id": "ORPH", "ope_no": "OP200", "hold_code": "ENHL", "hold_user": "ABO"}],
         }, n=30),
         _s("T31", "defense", "已結案又出現本系統 Hold", HAPPY + [
@@ -752,11 +790,26 @@ def seed_cases() -> list[ScenarioCase]:
         _s("T34", "control", "Resume 要 sponsor", [
             {"op": "disable_control"},
             {"op": "run", "fn": "resume"},
-        ], {"control_mode": "DISABLED_NEW_HOLD"}, n=34),
+        ], {
+            "control_mode": "DISABLED_NEW_HOLD",
+            "control": {"mode": "DISABLED_NEW_HOLD", "sponsor_id": None, "resume_evidence_ref": None},
+            "incidents": ["RESUME_DENIED"],
+            "last_function": "resume",
+        }, n=34),
         _s("T34b", "control", "Resume 有 sponsor", [
             {"op": "disable_control"},
             {"op": "run", "fn": "resume", "params": {"sponsor": "SP1", "evidence": "fixed"}},
-        ], {"control_mode": "ENABLED"}, n=341),
+        ], {
+            "control_mode": "ENABLED",
+            "control": {
+                "mode": "ENABLED",
+                "sponsor_id": "SP1",
+                "resume_evidence_ref": "fixed",
+                "health_check_ref": "fixed",
+            },
+            "incidents_absent": ["RESUME_DENIED"],
+            "last_function": "resume",
+        }, n=341),
         _s("T35", "defense", "心跳過期 AGENT_STALL", [
             {"op": "add_lot", "lot_id": "LOT1"},
             {"op": "run", "fn": "set"},
@@ -846,7 +899,40 @@ def seed_cases() -> list[ScenarioCase]:
             "work_state": "RELEASE_VERIFY_PENDING",
             "lifecycle": "OPEN",
             "actions": {"release": 1},
+            "incidents_absent": ["RELEASE_VERIFY_OVERDUE"],
         }, n=55),
+        _s("REL_OVERDUE_2H", "retry", "Release 查驗超過 2 小時開 Incident", HAPPY + [
+            {"op": "complete_ai", "lot_id": "LOT1"},
+            SETTLE,
+            {"op": "set_world", "release_response": {"LOT1": "timeout"}, "set_effect": {"release:LOT1": "none"}},
+            {"op": "run", "fn": "check"},
+            {"op": "advance", "hours": 2, "seconds": 1},
+            {"op": "run", "fn": "release"},
+        ], {
+            "work_state": "RELEASE_VERIFY_PENDING",
+            "lifecycle": "OPEN",
+            "actions": {"release": 1},
+            "incidents": ["RELEASE_VERIFY_OVERDUE"],
+        }, n=551),
+        _s("LOOKBACK_12H", "order", "只讀最近 12 小時 Operation Start", [
+            {"op": "add_lot", "lot_id": "LOT1"},
+            {"op": "advance", "hours": 13},
+            {"op": "run", "fn": "set"},
+        ], {
+            "open_count": 0,
+            "actions": {"set_hold": 0, "release": 0},
+        }, n=552),
+        _s("SMM_SCAN_COMPLETE", "smm", "已有 SMM Hold；掃完立即結案", [
+            {"op": "add_lot", "lot_id": "LOT1"},
+            {"op": "add_defect_hold", "lot_id": "LOT1", "ope_no": "OP200"},
+            {"op": "run", "fn": "set"},
+            {"op": "complete_ai", "lot_id": "LOT1", "result": "DEFECT"},
+            {"op": "run", "fn": "check"},
+        ], {
+            "work_state": "CLOSED",
+            "lifecycle": "CLOSED",
+            "actions": {"set_hold": 0, "release": 0},
+        }, n=553),
         _s("XFER_ACCUM", "smm", "未掃完不改 SMM Memo、不解 Default Hold", HAPPY + [
             {"op": "scan_wafer", "lot_id": "LOT1", "wafer_id": "W01", "result": "DEFECT"},
             {"op": "add_defect_hold", "lot_id": "LOT1", "memo": "Please check #1"},

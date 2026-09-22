@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 
 from vai_hold.adapters.persistence.memory.store import MemoryStore
 from vai_hold.domain.enums import ActionState
@@ -64,6 +64,73 @@ class _Orders:
         rows = [deepcopy(o) for o in self._s.orders.values()]
         rows.sort(key=lambda o: (o.created_at or datetime.min, o.order_id))
         return rows[:limit]
+
+    @staticmethod
+    def _utc(value: datetime | None) -> datetime:
+        if value is None:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def _list_since(
+        self,
+        since: datetime,
+        *,
+        open_only: bool,
+        limit: int,
+        after_created_at: datetime | None,
+        after_order_id: str | None,
+    ) -> list[HoldOrder]:
+        cutoff = self._utc(since)
+        cursor = (
+            (self._utc(after_created_at), after_order_id or "")
+            if after_created_at is not None
+            else None
+        )
+        rows = []
+        for order in self._s.orders.values():
+            if open_only and order.lifecycle.value != "OPEN":
+                continue
+            # 12 小時候選窗以本輪進站時間為準；updated_at 只是處理時間，
+            # 不能讓舊單因為最近被 Cron touch 過而重新進入視窗。
+            activity = self._utc(order.operation_start_at or order.created_at)
+            created_key = (self._utc(order.created_at), order.order_id)
+            if activity < cutoff or (cursor is not None and created_key <= cursor):
+                continue
+            rows.append(deepcopy(order))
+        rows.sort(key=lambda o: (self._utc(o.created_at), o.order_id))
+        return rows[:limit]
+
+    def list_open_since(
+        self,
+        since: datetime,
+        limit: int = 500,
+        after_created_at: datetime | None = None,
+        after_order_id: str | None = None,
+    ) -> list[HoldOrder]:
+        return self._list_since(
+            since,
+            open_only=True,
+            limit=limit,
+            after_created_at=after_created_at,
+            after_order_id=after_order_id,
+        )
+
+    def list_all_since(
+        self,
+        since: datetime,
+        limit: int = 500,
+        after_created_at: datetime | None = None,
+        after_order_id: str | None = None,
+    ) -> list[HoldOrder]:
+        return self._list_since(
+            since,
+            open_only=False,
+            limit=limit,
+            after_created_at=after_created_at,
+            after_order_id=after_order_id,
+        )
 
     def try_claim(
         self,

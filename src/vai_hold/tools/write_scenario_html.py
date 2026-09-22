@@ -20,8 +20,8 @@ GROUP_INTRO = {
     "v1": "V1 編號對照（長串走完，不是驗收單位）。",
     "happy": "串接走完（不是單格）。",
     "hold": "Default Hold 的設、查驗、衝突、消失、權限失敗。",
-    "ai": "Wafer 掃片未齊、結果無效、AI 查詢 UNKNOWN。",
-    "smm": "進站時現場已有 SMM Hold 則不設 Default Hold。本 Agent 不解、不改 SMM Hold。",
+    "ai": "Wafer 掃片未齊、ScanCompletedTime 完成、AI 查詢 UNKNOWN。",
+    "smm": "SMM Hold 只用於進站分流：已有則不設 Default Hold；掃片完成與結案不看 SMM Hold。",
     "release": "申請解除 Default Hold：成功、被拒、timeout。",
     "target": "選防守站：目前站／未來量測站。",
     "control": "停用新 Hold、Resume、人工結案。",
@@ -179,7 +179,6 @@ RULE_WHY = {
     "A2-03": "設 Default Hold 失敗",
     "A2-04": "曾確認的 Default Hold 不見了，當線上代解並結案",
     "A2-05": "Default Hold 還在，片還沒掃完，不解",
-    "A2-06": "掃片結果無效，不解 Default Hold",
     "A2-07": "（已併入 A2-21）掃完且滿 settle，申請解除 Default Hold",
     "A2-08": "（已併入 A2-21）掃完且滿 settle，申請解除 Default Hold",
     "A2-09": "已全部掃完，還沒滿 config 的 settle 分鐘，暫不解",
@@ -188,7 +187,6 @@ RULE_WHY = {
     "A2-10": "已申請解除，向 MES 確認自己的 Default Hold 還在不在",
     "A2-11": "自己的 Default Hold 已沒有，結案",
     "A2-12": "解除失敗，Default Hold 留著",
-    "A2-16": "SMM Hold 要補片號，請 MES 改 Memo",
 }
 
 RULE_TO_ACTION = {
@@ -199,7 +197,6 @@ RULE_TO_ACTION = {
     "A2-03": "OPEN_INCIDENT",
     "A2-04": "NONE",
     "A2-05": "NONE",
-    "A2-06": "NONE",
     "A2-07": "SET_RELEASE",
     "A2-08": "SET_RELEASE",
     "A2-09": "NONE",
@@ -208,7 +205,6 @@ RULE_TO_ACTION = {
     "A2-10": "VERIFY_RELEASE",
     "A2-11": "NONE",
     "A2-12": "OPEN_INCIDENT",
-    "A2-16": "TRANSFER_HOLD",
 }
 
 ACTION_WHY = {
@@ -216,7 +212,6 @@ ACTION_WHY = {
     "SET_RELEASE": "向 MES 申請解除 Default Hold",
     "VERIFY_HOLD": "向 MES 確認 Default Hold 是否存在",
     "VERIFY_RELEASE": "向 MES 確認 Default Hold 是否已解除",
-    "TRANSFER_HOLD": "請 MES 更新 SMM Hold 的說明",
     "OPEN_INCIDENT": "留下告警／錯誤紀錄",
     "NONE": "這一輪不向 MES 送新動作",
 }
@@ -287,12 +282,11 @@ def _facts_decision_bridge(actual: dict) -> str:
         inflight_txt = {
             "SET_HOLD": "剛設 Default Hold，還沒查完",
             "SET_RELEASE": "剛解除 Default Hold，還沒查完",
-            "TRANSFER_HOLD": "剛改 SMM Hold Memo，還沒查完",
         }.get(str(inflight.get("ActionType") or ""), "有，還沒查完")
     else:
         inflight_txt = "沒有"
 
-    if err and str(err) != "NO_SMM_HOLD_AFTER_SCAN":
+    if err:
         err_txt = str(err)
     else:
         err_txt = "沒有"
@@ -300,7 +294,7 @@ def _facts_decision_bridge(actual: dict) -> str:
 
     drive_hold = str(rule) in {"A1-03", "A2-02", "A2-04", "A2-11"}
     drive_smm = str(rule) in {"A2-20"}
-    drive_ai = str(rule) in {"A2-05", "A2-06", "A2-09", "A2-21"}
+    drive_ai = str(rule) in {"A2-05", "A2-09", "A2-21"}
     drive_inf = str(rule) in {"A2-01", "A2-10"}
     drive_err = bool(err)
 
@@ -308,7 +302,7 @@ def _facts_decision_bridge(actual: dict) -> str:
     if ch["default"] or drive_hold:
         cols.append(("本系統 Default Hold", hold_txt if not hold_skip else "—", False, drive_hold))
     if ch["smm"]:
-        cols.append(("SMM Hold", smm_txt, False, drive_smm))
+        cols.append(("進站時 SMM Hold", smm_txt, False, drive_smm))
     if ch["ai"]:
         cols.append(("掃片", ai_txt, False, drive_ai))
     if drive_inf:
@@ -408,8 +402,47 @@ def _this_cell_did(actual: dict) -> str:
 
 
 def _business_result(actual: dict) -> tuple[str, str]:
-    """人話：這一格對現場做了什麼、現在停在哪。"""
+    """人話：Lot 題顯示 Order 狀態；系統題顯示 Incident／Control 結果。"""
     ws = actual.get("work_state") or ""
+    incidents = set(actual.get("incidents") or [])
+    control = str(actual.get("control_mode") or "")
+    last_function = str(actual.get("last_function") or "")
+    if not ws:
+        if "ORPHAN_HOLD" in incidents:
+            return (
+                "建立 ORPHAN_HOLD 告警，沒有自動解除現場 Hold。",
+                "Defense 對帳已完成；Orphan Hold 仍保留，等待人工確認。",
+            )
+        if "COVERAGE_MISMATCH" in incidents:
+            return (
+                "建立 COVERAGE_MISMATCH 告警，記錄缺少與多餘的 OrderKey。",
+                "Defense 對帳已完成；覆蓋率不一致告警目前為 OPEN。",
+            )
+        if "RESUME_DENIED" in incidents:
+            return (
+                "因缺少 Sponsor 或修復證據，拒絕恢復新 Default Hold。",
+                "系統控制仍是 DISABLED_NEW_HOLD；目前仍禁止建立新 Default Hold。",
+            )
+        if last_function == "resume" and control == "ENABLED":
+            return (
+                "確認 Sponsor 與修復證據後，恢復新 Default Hold。",
+                "系統控制已是 ENABLED；目前允許建立新 Default Hold。",
+            )
+        if last_function == "set" and int(actual.get("open_count") or 0) == 0:
+            return (
+                "候選時間窗內沒有可處理的進站資料，因此沒有建單或送 Hold。",
+                "本題沒有建立 Lot Order；系統控制維持 ENABLED。",
+            )
+        incident_text = "、".join(sorted(incidents))
+        if incident_text:
+            return (
+                f"完成系統層級檢查並留下 {incident_text} 告警。",
+                f"這是系統層級情境，沒有單一 Lot Order；控制狀態為 {control or '未提供'}。",
+            )
+        return (
+            "完成系統層級操作。",
+            f"這是系統層級情境，沒有單一 Lot Order；控制狀態為 {control or '未提供'}。",
+        )
     did = _this_cell_did(actual)
     now = {
         "NEED_HOLD": "還沒向 MES 設 Default Hold。",
@@ -423,7 +456,7 @@ def _business_result(actual: dict) -> tuple[str, str]:
         "HOLD_FAILED": "設 Default Hold 失敗，這張單沒有防守。",
         "RELEASE_FAILED": "解除 Default Hold 失敗，Hold 還在。",
         "NEED_BACKUP_HOLD": "這個 Hold Code 設不上，會改用下一個 Code。",
-    }.get(str(ws), f"目前停在 {ws}。")
+    }.get(str(ws), f"Order 目前狀態為 {ws}。")
     return (did if did.endswith("。") else did + "。"), now
 
 
@@ -437,8 +470,6 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
     marks: dict[str, str] = {}
     here = actual.get("work_state") or ""
     data_error = actual.get("data_error")
-    if data_error == "NO_SMM_HOLD_AFTER_SCAN":
-        data_error = None
     close_reason = actual.get("close_reason")
     if path.is_file():
         conn = sqlite3.connect(path)
@@ -450,8 +481,6 @@ def _order_summary_section(scenario_id: str, actual: dict) -> str:
                 if "operation_start_at" in keys:
                     marks["進站"] = o["operation_start_at"]
                 data_error = data_error or (o["data_error"] if "data_error" in keys else None)
-                if data_error == "NO_SMM_HOLD_AFTER_SCAN":
-                    data_error = None
                 close_reason = close_reason or (o["close_reason"] if "close_reason" in keys else None)
                 here = here or (o["work_state"] if "work_state" in keys else "")
             row = conn.execute(
@@ -625,9 +654,7 @@ STATE_PURPOSE = {
     "HOLD_VERIFY_PENDING": "已送出、這格不查它在不在；下一格才查 MES",
     "PROTECTION_CONFIRMED": "已確認 MES 上有本系統 Default Hold",
     "WAIT_AI": "已設 Default Hold，等掃片或掃完未滿 2 分鐘",
-    "AI_RESULT_INVALID": "結果明確 INVALID；Default Hold 不解",
     "READY_RELEASE_OK": "可以申請解除 Default Hold",
-    "READY_RELEASE_HANDOFF": "已掃完且滿 settle，可解 Default Hold",
     "RELEASE_SENT": "已申請解除 Default Hold；MES／DB 可能還沒跟上",
     "RELEASE_VERIFY_PENDING": "正在查自己的 Hold 是否已沒有；還看得到先當 Delay，不重送、不失敗",
     "RELEASE_FAILED": "解除失敗，Hold 還在",
@@ -803,7 +830,7 @@ def render_case_html(
     if passed:
         verdict = f"""<div class="verdict pass">結論：與預期相符
     <div class="sub"><strong>實際系統做了：</strong>{html.escape(did)}</div>
-    <div class="sub"><strong>現在：</strong>{html.escape(now_txt)}</div>
+    <div class="sub"><strong>目前結果／狀態：</strong>{html.escape(now_txt)}</div>
   </div>"""
     else:
         diff_html = ""
@@ -812,7 +839,7 @@ def render_case_html(
         verdict = f"""<div class="verdict fail">結論：與預期不符
     <div class="sub"><strong>預期現場應看到：</strong>{html.escape(then or "見對照明細")}</div>
     <div class="sub"><strong>實際系統做了：</strong>{html.escape(did)}</div>
-    <div class="sub"><strong>現在：</strong>{html.escape(now_txt)}</div>
+    <div class="sub"><strong>目前結果／狀態：</strong>{html.escape(now_txt)}</div>
     {diff_html}
   </div>"""
     compare_block = ""
@@ -848,8 +875,8 @@ def render_case_html(
         )
     if ch["smm"]:
         fact_bits.append(
-            "<div><h3>SmmHold</h3>"
-            "<p class='muted'>已查過的現場正式 Defect Hold（SMMH／AOA）。空陣列＝查過、現場沒有。</p>"
+            "<div><h3>進站時 SmmHold</h3>"
+            "<p class='muted'>只用來決定是否略過 Default Hold；不作為掃片完成、Release 或結案條件。</p>"
             f"{_json_block(_smm_facts(facts.get('SmmHold')))}</div>"
         )
     if ch["ai"]:
@@ -946,7 +973,6 @@ def _index_machine(link_prefix: str) -> str:
             "RELEASE_SENT",
             "RELEASE_VERIFY_PENDING",
             "CLOSED",
-            "DEFECT_HOLD_UNCONFIRMED",
         ]
     )
     return f"""stateDiagram-v2
@@ -993,7 +1019,7 @@ def render_index_html(rows: list[dict], *, link_prefix: str) -> str:
         )
         inner = (
             f"<table><thead><tr><th>#</th><th>ID</th><th>這一格做什麼</th><th>結論</th>"
-            f"<th>現在</th></tr></thead><tbody>{trs}</tbody></table>"
+            f"<th>目前結果／狀態</th></tr></thead><tbody>{trs}</tbody></table>"
         )
         if group == "v1":
             blocks.append(
@@ -1036,8 +1062,9 @@ def render_index_html(rows: list[dict], *, link_prefix: str) -> str:
 <body>
 <header>
   <h1>Vision AI Hold — 情境庫總覽</h1>
-  <p class="story">每一頁同一格式：<strong>這題要做什麼 → 結論 → 單子走到哪 → 為什麼做這一步</strong>。
+  <p class="story">每一頁同一格式：<strong>這題要做什麼 → 結論 → 目前結果／狀態 → 為什麼做這一步</strong>。
   點 <code>C01</code>…<code>C11</code>。結論先看過／不過，不必對表。</p>
+  <p class="muted">Lot 情境顯示 Order 目前停在哪個狀態；Defense／Control 情境沒有單一 Order，改顯示已開啟的 Incident 與全域控制狀態。</p>
   <div class="card spec">
     <h2>主路徑狀態機</h2>
     <pre class="mermaid">

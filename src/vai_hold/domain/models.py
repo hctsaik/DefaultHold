@@ -135,7 +135,7 @@ class HoldOrder:
     last_rule_id: str | None = None
     state_reason: str | None = None
     close_reason: str | None = None
-    data_error: str | None = None  # 事後可查的資料錯誤；解 Hold 不再寫 NO_SMM_HOLD_AFTER_SCAN
+    data_error: str | None = None  # 事後可查的資料錯誤；SMM Hold 不參與 Release／結案 gate
     last_snapshot_ref: str | None = None
     row_version: int = 1
     next_check_at: datetime | None = None
@@ -349,7 +349,8 @@ class Decision:
     target: HoldTarget | None = None
     missing_wafers: list[str] = field(default_factory=list)
     incidents: list[str] = field(default_factory=list)
-    memo: str | None = None  # desired SmmHold memo for TRANSFER_HOLD
+    # 相容舊 decision payload；目前沒有 SMM Hold transfer writer。
+    memo: str | None = None
 
 
 IN_FLIGHT_ACTION_STATES = frozenset(

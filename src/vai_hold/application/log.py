@@ -138,7 +138,9 @@ def facts_digest(snap: Snapshot) -> dict[str, Any]:
             else None
         ),
         "remaining_codes": [c for c in snap.hold_codes if c not in attempted],
-        "has_defect_hold": bool(
+        # SMM Hold 只用在 A2-20 的進站分流（已有則不再設 Default Hold）。
+        # 它不是掃片完成、Release 或結案的 gate。
+        "entry_smm_hold_present": bool(
             snap.order
             and any(
                 is_smm_hold(
@@ -335,7 +337,7 @@ def converted_state(snap: Snapshot, decision: Decision) -> dict[str, Any]:
         "expected_count": d.get("expected_wafers"),
         "missing_count": d.get("missing_count"),
         "new_hold_allowed": d.get("control") == "ENABLED",
-        "defect_handoff_ready": bool(d.get("has_defect_hold")),
+        "entry_smm_hold_present": bool(d.get("entry_smm_hold_present")),
     }
 
 
